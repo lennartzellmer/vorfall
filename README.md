@@ -2,7 +2,7 @@
 
 > Type-safe event sourcing with MongoDB and projections
 
-[![npm version](https://badge.fury.io/js/@vorfall%2Feventstore.svg)](https://badge.fury.io/js/@vorfall%2Feventstore)
+[![npm version](https://badge.fury.io/js/vorfall.svg)](https://badge.fury.io/js/vorfall)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/%3C%2F%3E-TypeScript-%230074c1.svg)](http://www.typescriptlang.org/)
 
@@ -178,6 +178,34 @@ We welcome contributions!
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## Publishing
+
+This package is automatically published to NPM under the name `vorfall` using GitHub Actions.
+
+### Automatic Publishing
+
+- **On Release**: When you create a new release on GitHub, the package will be automatically published to NPM with the version specified in the release.
+
+### Manual Publishing
+
+You can also manually trigger a publish by going to the "Actions" tab in the GitHub repository and running the "Publish to NPM" workflow. You can specify:
+
+- `patch` - Increments the patch version (1.0.0 → 1.0.1)
+- `minor` - Increments the minor version (1.0.0 → 1.1.0)
+- `major` - Increments the major version (1.0.0 → 2.0.0)
+- Or specify an exact version like `1.2.3`
+
+### Prerequisites
+
+Before publishing, make sure you have:
+
+1. Set up the `NPM_TOKEN` secret in your GitHub repository settings
+   - Go to GitHub repository → Settings → Secrets and variables → Actions
+   - Add a new repository secret named `NPM_TOKEN`
+   - Use your NPM access token as the value
+
+2. Ensure all tests pass and the package builds successfully
 
 ## License
 
