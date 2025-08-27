@@ -1,0 +1,28 @@
+{
+  "name": "vorfall",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.11.0",
+  "description": "Monorepo for Vorfall event sourcing packages.",
+  "author": "",
+  "license": "ISC",
+  "keywords": [
+    "event-sourcing",
+    "monorepo",
+    "mongodb"
+  ],
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "5.2.1",
+    "@types/node": "24.3.0",
+    "eslint": "9.34.0",
+    "vitest": "3.2.4",
+    "vitest-mock-extended": "3.1.0"
+  }
+}

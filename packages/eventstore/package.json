@@ -1,0 +1,33 @@
+{
+  "name": "@vorfall/eventstore",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Event store package for Vorfall monorepo.",
+  "author": "",
+  "license": "ISC",
+  "keywords": [
+    "eventstore",
+    "event-sourcing",
+    "mongodb"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "cloudevents": "^10.0.0",
+    "mongodb": "^6.18.0"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^10.2.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4",
+    "vitest-mock-extended": "^3.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

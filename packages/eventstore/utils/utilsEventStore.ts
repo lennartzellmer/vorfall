@@ -1,0 +1,103 @@
+import type { EventStream } from '../eventStore/eventStoreFactory.types.js'
+import type { DefaultRecord, DomainEvent, Subject } from '../types/index.js'
+import { randomUUID } from 'node:crypto'
+import { CloudEvent } from 'cloudevents'
+import { createSubject, getStreamSubjectFromSubject } from './utilsSubject.js'
+
+/**
+ * Check if all events in an array have the same 2 parts in their subject
+ * @param events The array of cloudevents to check
+ * @returns The collection name with 'rbag:' prefix
+ */
+export function eventsHaveSameStreamSubject<
+  EventType extends string = string,
+  EventData extends DefaultRecord | undefined = DefaultRecord,
+  EventMetaData extends DefaultRecord | undefined = undefined,
+>(events: Array<DomainEvent<EventType, EventData, EventMetaData>>): boolean {
+  const [firstEvent] = events
+  if (!firstEvent) {
+    throw new Error('Cannot check stream subject for an empty array of events')
+  }
+  const firstEventSubject = createSubject(firstEvent.subject)
+  const firstStreamSubject = getStreamSubjectFromSubject(firstEventSubject)
+  return events.every((event) => {
+    const eventSubject = createSubject(event.subject)
+    return getStreamSubjectFromSubject(eventSubject) === firstStreamSubject
+  })
+}
+
+/**
+ * Creates a DomainCloudEvent which is a CloudEvent with a mandatory subject field
+ * @template Type The event type as a string literal
+ * @template EventData The type of the data in the CloudEvent
+ * @template EventMetaData The metadata type
+ * @param domainCloudEventAttributes The attributes for the CloudEvent
+ * @returns A DomainCloudEvent with the specified data and inferred types
+ */
+export function createDomainEvent<
+  Type extends string = string,
+  EventData extends DefaultRecord | undefined = undefined,
+  EventMetaData extends DefaultRecord | undefined = undefined,
+>(
+  domainCloudEventAttributes: EventMetaData extends undefined
+    ? {
+        type: Type
+        subject: Subject
+        data?: EventData | undefined
+      }
+    : {
+        type: Type
+        subject: Subject
+        data?: EventData | undefined
+        metadata: EventMetaData
+      },
+): DomainEvent<Type, EventData, EventMetaData> {
+  const DEFAULTS = {
+    id: randomUUID(),
+    source: 'rbag.de',
+    specversion: '1.0',
+    version: '1.0',
+    date: new Date(),
+    datacontenttype: 'application/json',
+  } as const
+
+  const eventAttributes = { ...DEFAULTS, ...domainCloudEventAttributes }
+  const cloudEvent = new CloudEvent(eventAttributes) as unknown as DomainEvent<Type, EventData, EventMetaData>
+
+  return cloudEvent
+}
+
+/**
+ * Creates an EventStream from an array of DomainEvents
+ * @template EventType The event type as a string literal
+ * @template EventData The type of the data in the CloudEvent
+ * @template EventMetaData The metadata type
+ * @param events The array of DomainEvents to create the EventStream from
+ * @returns An EventStream containing the provided events
+ */
+export function createEventStream<
+  EventType extends string = string,
+  EventData extends DefaultRecord = DefaultRecord,
+  EventMetaData extends DefaultRecord | undefined = undefined,
+>(
+  events: Array<DomainEvent<EventType, EventData, EventMetaData>>,
+): EventStream<EventType, EventData, EventMetaData> {
+  const firstEvent = events[0]
+
+  if (!firstEvent) {
+    throw new Error('Cannot create an event stream from an empty array of events')
+  }
+
+  const streamSubject = getStreamSubjectFromSubject(createSubject(firstEvent.subject))
+
+  return {
+    streamId: randomUUID(),
+    streamSubject,
+    events,
+    metadata: {
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    projections: undefined,
+  }
+}
