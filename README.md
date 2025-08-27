@@ -6,36 +6,24 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/%3C%2F%3E-TypeScript-%230074c1.svg)](http://www.typescriptlang.org/)
 
-A modern, type-safe event sourcing library for Node.js applications using MongoDB as the event store. Built with TypeScript for maximum developer experience and runtime safety.
-
-## Introduction
-
-Vorfall is an event sourcing library that helps you build applications where every change to application state is captured as an event. This approach provides:
-
-- **Complete audit trail** - Every change is recorded with full context
-- **Time travel** - Query your application state at any point in time
-- **Scalability** - Event streams can be processed independently
-- **Debugging** - Replay events to understand how bugs occurred
-- **Integration** - Events can trigger side effects in other systems
+A modern, type-safe event sourcing library for Node.js applications using MongoDB as the event store. Built with TypeScript for maximum developer experience and safety.
 
 ## Why This Package?
 
 Most event sourcing solutions are either too complex for simple use cases or lack proper TypeScript support. Vorfall bridges this gap by providing:
 
-- 🛡️ **Full TypeScript support** - End-to-end type safety from events to projections
-- 🚀 **MongoDB integration** - Leverages MongoDB's document model and indexing
-- 📊 **Built-in projections** - Create read models automatically from events
-- 🎯 **Simple API** - Easy to understand and integrate
-- ⚡ **High performance** - Optimized queries and efficient event processing
-- 🧪 **Testing utilities** - Built-in testing helpers with memory server support
+- **Full TypeScript support** - End-to-end type safety from events to projections
+- **MongoDB integration** - Leverages MongoDB's document model
+- **Built-in projections** - Create inline read models automatically from events
+- **CQRS pattern support** - Helper functions to handle commands and events with type safety
 
 ## Quick Start
 
 Here's a simple example showing user registration and profile updates:
 
 ```typescript
-import { createEventStore, createProjectionDefinition } from '@vorfall/eventstore'
 import { CloudEvent } from 'cloudevents'
+import { createEventStore, createProjectionDefinition } from 'vorfall'
 
 // Define your domain events
 interface UserRegistered {
@@ -69,15 +57,12 @@ const userProfileProjection = createProjectionDefinition({
         return {
           userId: event.data.userId,
           email: event.data.email,
-          name: event.data.name,
-          createdAt: event.time!,
-          updatedAt: event.time!
+          name: event.data.name
         }
       case 'UserProfileUpdated':
         return {
-          ...state!,
+          ...state,
           ...event.data,
-          updatedAt: event.time!
         }
     }
   },
@@ -116,25 +101,13 @@ async function getUserProfile(userId: string) {
 
 ```bash
 # Using npm
-npm install @vorfall/eventstore cloudevents mongodb
+npm install vorfall
 
 # Using pnpm
-pnpm add @vorfall/eventstore cloudevents mongodb
+pnpm add vorfall
 
 # Using yarn
-yarn add @vorfall/eventstore cloudevents mongodb
-```
-
-## Basic Setup
-
-```typescript
-import { createEventStore } from '@vorfall/eventstore'
-
-const eventStore = await createEventStore({
-  mongoUrl: 'mongodb://localhost:27017',
-  databaseName: 'your-app',
-  projections: [] // Add your projections here
-})
+yarn add vorfall
 ```
 
 ## Development Setup
@@ -181,6 +154,11 @@ pnpm --filter @vorfall/eventstore test
 - **Projections** - Read models built from events, automatically maintained
 - **Subjects** - Hierarchical identifiers for event streams (e.g., `user/123`, `order/456/item/789`)
 - **Commands** - Operations that may produce events
+- **CQRS Support** - Built-in helper functions to easily handle commands and transform them into events with full type safety
+
+## CQRS Pattern Support
+
+Vorfall provides comprehensive CQRS (Command Query Responsibility Segregation) support with helper functions that make it easy to handle commands and transform them into events while maintaining type safety throughout the entire flow.
 
 ## Documentation
 
