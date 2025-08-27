@@ -1,4 +1,4 @@
-name: Publish to NPM
+name: Publish Package to npmjs
 
 on:
   release:
@@ -11,17 +11,18 @@ on:
         default: patch
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      
+      # Setup .npmrc file to publish to npm
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20.x'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install pnpm
@@ -38,24 +39,30 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Update package version (if triggered manually)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Update package version
         run: |
           cd packages/eventstore
-          if [ "${{ github.event.inputs.version }}" = "patch" ] || [ "${{ github.event.inputs.version }}" = "minor" ] || [ "${{ github.event.inputs.version }}" = "major" ]; then
-            pnpm version ${{ github.event.inputs.version }} --no-git-tag-version
-          else
-            pnpm version ${{ github.event.inputs.version }} --no-git-tag-version
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # Extract version from release tag (remove 'v' prefix if present)
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"
+            npm version "$VERSION" --no-git-tag-version --allow-same-version
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.version }}" = "patch" ] || [ "${{ github.event.inputs.version }}" = "minor" ] || [ "${{ github.event.inputs.version }}" = "major" ]; then
+              npm version ${{ github.event.inputs.version }} --no-git-tag-version
+            else
+              npm version ${{ github.event.inputs.version }} --no-git-tag-version --allow-same-version
+            fi
           fi
 
       - name: Publish to NPM
         run: |
           cd packages/eventstore
-          pnpm publish --access public --no-git-checks
+          npm publish --provenance --access public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Create Git tag (if triggered manually)
+      - name: Create Git tag and commit (if triggered manually)
         if: github.event_name == 'workflow_dispatch'
         run: |
           cd packages/eventstore

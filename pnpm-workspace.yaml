@@ -1,2 +1,13 @@
 packages:
   - 'packages/*'
+
+catalog:
+  '@antfu/eslint-config': 5.2.1
+  '@types/node': 24.3.0
+  cloudevents: ^10.0.0
+  eslint: 9.34.0
+  mongodb: ^6.18.0
+  mongodb-memory-server: ^10.2.0
+  typescript: ^5.9.2
+  vitest: 3.2.4
+  vitest-mock-extended: 3.1.0
