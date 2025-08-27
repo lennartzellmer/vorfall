@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.11.0",
   "description": "Monorepo for Vorfall event sourcing packages.",
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "keywords": [
     "event-sourcing",
     "monorepo",
