@@ -196,17 +196,6 @@ You can also manually trigger a publish by going to the "Actions" tab in the Git
 - `major` - Increments the major version (1.0.0 → 2.0.0)
 - Or specify an exact version like `1.2.3`
 
-### Prerequisites
-
-Before publishing, make sure you have:
-
-1. Set up the `NPM_TOKEN` secret in your GitHub repository settings
-   - Go to GitHub repository → Settings → Secrets and variables → Actions
-   - Add a new repository secret named `NPM_TOKEN`
-   - Use your NPM access token as the value
-
-2. Ensure all tests pass and the package builds successfully
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
