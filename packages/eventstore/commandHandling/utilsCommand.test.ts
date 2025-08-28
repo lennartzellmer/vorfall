@@ -17,11 +17,10 @@ describe('createCommand', () => {
   it('should create a command with undefined data', () => {
     const type = 'SIMPLE_COMMAND'
 
-    const command = createCommand({ type, data: undefined })
+    const command = createCommand({ type })
 
     expect(command).toEqual({
       type: 'SIMPLE_COMMAND',
-      data: undefined,
     })
   })
 
@@ -35,6 +34,18 @@ describe('createCommand', () => {
     expect(command).toEqual({
       type: 'TEST_COMMAND',
       data: { value: 'test' },
+      metadata: { userId: '123' },
+    })
+  })
+
+  it('should create a command with metadata but no data property', () => {
+    const type = 'SIMPLE_COMMAND'
+    const metadata = { userId: '123' }
+
+    const command = createCommand({ type, metadata })
+
+    expect(command).toEqual({
+      type: 'SIMPLE_COMMAND',
       metadata: { userId: '123' },
     })
   })

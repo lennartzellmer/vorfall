@@ -9,7 +9,6 @@ export async function handleCommand<
   EventData extends DefaultRecord = DefaultRecord,
   EventMetaData extends DefaultRecord | undefined = undefined,
 >(
-
   options: CommandHandlerOptions<State, CommandType, CommandData, CommandMetadata, EventType, EventData, EventMetaData>,
 ): Promise<any> {
   const {

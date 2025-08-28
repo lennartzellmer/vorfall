@@ -27,6 +27,9 @@ export type CommandHandlerFunction<
   EventData extends DefaultRecord = DefaultRecord,
   EventMetaData extends DefaultRecord | undefined = undefined,
 > = (params: { command: Command<CommandType, CommandData, CommandMetadata>, state?: State }) =>
-DomainEvent<EventType, EventData, EventMetaData>
+  | DomainEvent<EventType, EventData, EventMetaData>
+  | DomainEvent<EventType, EventData, EventMetaData>[]
+  | Promise<DomainEvent<EventType, EventData, EventMetaData>>
+  | Promise<DomainEvent<EventType, EventData, EventMetaData>[]>
 
 export type DefaultRecord = Record<string, unknown>
