@@ -12,15 +12,9 @@ catalogs:
     '@types/node':
       specifier: 24.3.0
       version: 24.3.0
-    cloudevents:
-      specifier: ^10.0.0
-      version: 10.0.0
     eslint:
       specifier: 9.34.0
       version: 9.34.0
-    mongodb:
-      specifier: ^6.18.0
-      version: 6.18.0
     mongodb-memory-server:
       specifier: ^10.2.0
       version: 10.2.0
@@ -57,10 +51,10 @@ importers:
   packages/eventstore:
     dependencies:
       cloudevents:
-        specifier: 'catalog:'
+        specifier: ^10.0.0
         version: 10.0.0
       mongodb:
-        specifier: 'catalog:'
+        specifier: ^6.18.0
         version: 6.18.0
     devDependencies:
       mongodb-memory-server:
