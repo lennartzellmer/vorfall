@@ -1,3 +1,5 @@
+export * from './commandHandling/handleCommand.js'
+export * from './commandHandling/utilsCommand.js'
 export * from './eventStore/eventStoreFactory.js'
 export * from './eventStore/eventStoreFactory.types.js'
 export * from './types/index.js'
