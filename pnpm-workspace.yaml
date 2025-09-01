@@ -4,6 +4,7 @@ packages:
 catalog:
   '@antfu/eslint-config': 5.2.1
   '@types/node': 24.3.0
+  '@vitest/ui': 3.2.4
   cloudevents: ^10.0.0
   eslint: 9.34.0
   mongodb: ^6.18.0

@@ -16,11 +16,15 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "build": "pnpm -r build",
-    "test": "pnpm -r test"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
     "@types/node": "catalog:",
+    "@vitest/ui": "catalog:",
     "eslint": "catalog:",
     "vitest": "catalog:",
     "vitest-mock-extended": "catalog:"
