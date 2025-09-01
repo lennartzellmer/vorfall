@@ -7,7 +7,7 @@ import { createSubject, getStreamSubjectFromSubject } from './utilsSubject.js'
 /**
  * Check if all events in an array have the same 2 parts in their subject
  * @param events The array of cloudevents to check
- * @returns The collection name with 'rbag:' prefix
+ * @returns The collection name
  */
 export function eventsHaveSameStreamSubject<
   EventType extends string = string,
@@ -54,7 +54,7 @@ export function createDomainEvent<
 ): DomainEvent<Type, EventData, EventMetaData> {
   const DEFAULTS = {
     id: randomUUID(),
-    source: 'rbag.de',
+    source: 'vorfall.eventsourcing.system',
     specversion: '1.0',
     version: '1.0',
     date: new Date(),

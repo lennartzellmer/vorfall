@@ -13,7 +13,7 @@ describe('createDomainCloudEvent', () => {
     expect(event.id).toBeDefined()
     expect(event.specversion).toBe('1.0')
     expect(event.type).toBe('user.created')
-    expect(event.source).toBe('rbag.de')
+    expect(event.source).toBe('vorfall.eventsourcing.system')
     expect(event.subject).toBe('user/123/created')
     expect(event.data).toEqual({ name: 'John Doe' })
     expect(event.datacontenttype).toBe('application/json')
