@@ -1,4 +1,4 @@
-import type { DefaultRecord } from './index.js'
+import type { DefaultRecord } from './index'
 
 export type Command<
   CommandType extends string = string,

@@ -23,6 +23,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -b",
+    "build:bundle": "vite build",
     "test": "vitest run",
     "lint": "eslint . --ext .ts,.tsx"
   },

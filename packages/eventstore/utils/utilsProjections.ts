@@ -1,8 +1,8 @@
-import type { EventStoreInstance } from '../eventStore/eventStoreFactory.js'
-import type { EventStream, ProjectionQuery } from '../eventStore/eventStoreFactory.types.js'
-import type { AnyDomainEvent, DefaultRecord, StreamSubject, Subject } from '../types/index.js'
-import type { CanHandle, ProjectionDefinition, ProjectionQueryOptions } from './utilsProjections.types.js'
-import { transformFilterForNestedPath } from './utilsMongoFilter.js'
+import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
+import type { EventStream, ProjectionQuery } from '../eventStore/eventStoreFactory.types'
+import type { AnyDomainEvent, DefaultRecord, StreamSubject, Subject } from '../types/index'
+import type { CanHandle, ProjectionDefinition, ProjectionQueryOptions } from './utilsProjections.types'
+import { transformFilterForNestedPath } from './utilsMongoFilter'
 
 /**
  * Creates a projection definition for handling events and evolving state in a type safe manner.

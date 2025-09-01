@@ -1,5 +1,5 @@
-import type { Command } from '../types/index.js'
-import type { DefaultRecord } from './handleCommand.types.js'
+import type { Command } from '../types/index'
+import type { DefaultRecord } from './handleCommand.types'
 
 // Overload 1: Only type (no data, no metadata)
 export function createCommand<

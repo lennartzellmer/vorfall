@@ -1,4 +1,4 @@
-import type { CommandHandlerOptions, DefaultRecord } from './handleCommand.types.js'
+import type { CommandHandlerOptions, DefaultRecord } from './handleCommand.types'
 
 export async function handleCommand<
   State,

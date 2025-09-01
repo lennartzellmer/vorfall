@@ -1,11 +1,11 @@
 import type { Collection, PushOperator, UpdateFilter, WithId } from 'mongodb'
-import type { DefaultRecord, DomainEvent, Subject } from '../types/index.js'
-import type { ProjectionDefinition } from '../utils/utilsProjections.types.js'
-import type { EventStoreOptions, EventStream, ReadStreamResult } from './eventStoreFactory.types.js'
+import type { DefaultRecord, DomainEvent, Subject } from '../types/index'
+import type { ProjectionDefinition } from '../utils/utilsProjections.types'
+import type { EventStoreOptions, EventStream, ReadStreamResult } from './eventStoreFactory.types'
 import { randomUUID } from 'node:crypto'
-import { MongoClientWrapper } from '../mongoClient/mongoClientWrapper.js'
-import { eventsHaveSameStreamSubject } from '../utils/utilsEventStore.js'
-import { createSubject, getCollectionNameFromSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject.js'
+import { MongoClientWrapper } from '../mongoClient/mongoClientWrapper'
+import { eventsHaveSameStreamSubject } from '../utils/utilsEventStore'
+import { createSubject, getCollectionNameFromSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject'
 
 export interface EventStoreInstance<
   TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,

@@ -1,5 +1,5 @@
-import type { EventStoreInstance } from '../eventStore/eventStoreFactory.js'
-import type { Command, DomainEvent, StreamSubject } from '../types/index.js'
+import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
+import type { Command, DomainEvent, StreamSubject } from '../types/index'
 
 export interface CommandHandlerOptions<
   State,

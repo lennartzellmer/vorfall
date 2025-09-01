@@ -1,5 +1,5 @@
 import type { Db } from 'mongodb'
-import type { MongoClientWrapperOptions } from './mongoClientWrapper.types.js'
+import type { MongoClientWrapperOptions } from './mongoClientWrapper.types'
 import { MongoClient } from 'mongodb'
 
 export class MongoClientWrapper {

@@ -1,6 +1,6 @@
 import type { Document, Filter } from 'mongodb'
-import type { DefaultRecord, DomainEvent, StreamSubject } from '../types/index.js'
-import type { ProjectionDefinition } from '../utils/utilsProjections.types.js'
+import type { DefaultRecord, DomainEvent, StreamSubject } from '../types/index'
+import type { ProjectionDefinition } from '../utils/utilsProjections.types'
 
 export interface EventStoreOptions<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined> {
   connectionString: string

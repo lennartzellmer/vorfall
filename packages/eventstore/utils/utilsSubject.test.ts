@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createSubject, getCollectionNameFromSubject, getStreamSubjectFromSubject } from './utilsSubject.js'
+import { createSubject, getCollectionNameFromSubject, getStreamSubjectFromSubject } from './utilsSubject'
 
 describe('getStreamSubjectFromSubject', () => {
   it('should return root for valid multi-part subject', () => {

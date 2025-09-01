@@ -1,18 +1,15 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig } from 'vite'
 
 export default defineConfig({
   test: {
-    // Global test settings
-    globals: false, // Prefer explicit imports for better IDE support
+    globals: false,
     environment: 'node',
 
-    // Test file patterns
     include: [
       'packages/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
       'packages/**/__tests__/**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
     ],
 
-    // Coverage configuration
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -36,16 +33,12 @@ export default defineConfig({
       },
     },
 
-    // Test timeout
     testTimeout: 10000,
 
-    // Setup files for common test utilities
     setupFiles: [],
 
-    // Reporter configuration
     reporters: ['verbose'],
 
-    // Pool options for better performance in monorepo
     pool: 'threads',
     poolOptions: {
       threads: {
@@ -55,8 +48,11 @@ export default defineConfig({
     },
   },
 
-  // TypeScript support
   esbuild: {
     target: 'esnext',
+  },
+
+  optimizeDeps: {
+    exclude: ['mongodb', 'cloudevents'],
   },
 })

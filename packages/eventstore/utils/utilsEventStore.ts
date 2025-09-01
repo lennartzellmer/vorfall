@@ -1,8 +1,8 @@
-import type { EventStream } from '../eventStore/eventStoreFactory.types.js'
-import type { DefaultRecord, DomainEvent, Subject } from '../types/index.js'
+import type { EventStream } from '../eventStore/eventStoreFactory.types'
+import type { DefaultRecord, DomainEvent, Subject } from '../types/index'
 import { randomUUID } from 'node:crypto'
 import { CloudEvent } from 'cloudevents'
-import { createSubject, getStreamSubjectFromSubject } from './utilsSubject.js'
+import { createSubject, getStreamSubjectFromSubject } from './utilsSubject'
 
 /**
  * Check if all events in an array have the same 2 parts in their subject

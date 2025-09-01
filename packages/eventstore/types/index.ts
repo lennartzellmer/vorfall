@@ -1,5 +1,5 @@
-export * from './command.js'
-export * from './domainEvent.js'
+export * from './command.types'
+export * from './domainEvent.types'
 
 export type Brand<K, T> = K & { readonly __brand: T }
 

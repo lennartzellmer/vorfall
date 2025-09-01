@@ -1,12 +1,12 @@
-import type { DomainEvent } from '../types/index.js'
-import type { EventStoreInstance } from './eventStoreFactory.js'
+import type { DomainEvent } from '../types/index'
+import type { EventStoreInstance } from './eventStoreFactory'
 import { CloudEvent } from 'cloudevents'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { createDomainEvent, createEventStream } from '../utils/utilsEventStore.js'
-import { createProjectionDefinition } from '../utils/utilsProjections.js'
-import { createSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject.js'
-import { createEventStore } from './eventStoreFactory.js'
+import { createDomainEvent, createEventStream } from '../utils/utilsEventStore'
+import { createProjectionDefinition } from '../utils/utilsProjections'
+import { createSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject'
+import { createEventStore } from './eventStoreFactory'
 
 describe('mongoClientWrapper Integration Tests', () => {
   let mongod: MongoMemoryServer

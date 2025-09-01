@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { transformFilterForNestedPath } from './utilsMongoFilter.js'
+import { transformFilterForNestedPath } from './utilsMongoFilter'
 
 describe('transformFilterForNestedPath', () => {
   it('transforms simple field queries', () => {

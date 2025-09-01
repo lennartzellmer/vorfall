@@ -1,11 +1,11 @@
 import type { MockedObject } from 'vitest'
-import type { EventStoreInstance } from '../eventStore/eventStoreFactory.js'
-import type { Command, DomainEvent } from '../types/index.js'
+import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
+import type { Command, DomainEvent } from '../types/index'
 import { describe, expect, it, vi } from 'vitest'
-import { createDomainEvent, createEventStream } from '../utils/utilsEventStore.js'
-import { createStreamSubject } from '../utils/utilsSubject.js'
-import { handleCommand } from './handleCommand.js'
-import { createCommand } from './utilsCommand.js'
+import { createDomainEvent, createEventStream } from '../utils/utilsEventStore'
+import { createStreamSubject } from '../utils/utilsSubject'
+import { handleCommand } from './handleCommand'
+import { createCommand } from './utilsCommand'
 
 describe('handleCommand', () => {
   it('should aggregate stream, execute command handler, and append events', async () => {

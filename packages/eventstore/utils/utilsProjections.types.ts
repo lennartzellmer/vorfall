@@ -1,5 +1,5 @@
 import type { Document } from 'mongodb'
-import type { AnyDomainEvent, DomainEvent, MaybeAwait } from '../types/index.js'
+import type { AnyDomainEvent, DomainEvent, MaybeAwait } from '../types/index'
 
 export type MessageTypeOf<T extends AnyDomainEvent> = T['type']
 

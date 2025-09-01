@@ -1,11 +1,11 @@
-import type { EventStoreInstance } from '../eventStore/eventStoreFactory.js'
-import type { DomainEvent } from '../types/index.js'
+import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
+import type { DomainEvent } from '../types'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { createEventStore } from '../eventStore/eventStoreFactory.js'
-import { createDomainEvent } from './utilsEventStore.js'
-import { countProjections, createProjectionDefinition, findMultipleProjections, findOneProjection } from './utilsProjections.js'
-import { createSubject, getStreamSubjectFromSubject } from './utilsSubject.js'
+import { createEventStore } from '../eventStore/eventStoreFactory'
+import { createDomainEvent } from './utilsEventStore'
+import { countProjections, createProjectionDefinition, findMultipleProjections, findOneProjection } from './utilsProjections'
+import { createSubject, getStreamSubjectFromSubject } from './utilsSubject'
 
 describe('createProjectionDefinition', () => {
   it('should create a type save projection definition', async () => {

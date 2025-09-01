@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createDomainEvent, eventsHaveSameStreamSubject } from './utilsEventStore.js'
-import { createSubject } from './utilsSubject.js'
+import { createDomainEvent, eventsHaveSameStreamSubject } from './utilsEventStore'
+import { createSubject } from './utilsSubject'
 
 describe('createDomainCloudEvent', () => {
   it('should create a CloudEvent with default values', () => {

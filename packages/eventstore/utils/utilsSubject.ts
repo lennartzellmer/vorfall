@@ -1,4 +1,4 @@
-import type { StreamSubject, Subject } from '../types/index.js'
+import type { StreamSubject, Subject } from '../types/index'
 
 const STREAM_SUBJECT_REGEX = /^[a-z0-9-]+(?:\/[a-z0-9-]+)*$/i
 

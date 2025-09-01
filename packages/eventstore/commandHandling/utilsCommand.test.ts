@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createCommand } from './utilsCommand.js'
+import { createCommand } from './utilsCommand'
 
 describe('createCommand', () => {
   it('should create a command with type and data', () => {
