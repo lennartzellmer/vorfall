@@ -24,6 +24,7 @@ export default defineConfig({
         'packages/**/*.spec.{js,ts}',
         'packages/**/*.config.{js,ts}',
         'packages/**/*.d.ts',
+        'packages/**/*.types.ts',
       ],
       thresholds: {
         global: {
