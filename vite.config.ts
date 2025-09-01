@@ -33,19 +33,9 @@ export default defineConfig({
       },
     },
 
-    testTimeout: 10000,
-
     setupFiles: [],
 
     reporters: ['verbose'],
-
-    pool: 'threads',
-    poolOptions: {
-      threads: {
-        singleThread: false,
-        isolate: true,
-      },
-    },
   },
 
   esbuild: {
