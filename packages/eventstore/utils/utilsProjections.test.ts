@@ -4,7 +4,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createEventStore } from '../eventStore/eventStoreFactory.js'
 import { createDomainEvent } from './utilsEventStore.js'
-import { createProjectionDefinition, findMultipleProjections, findOneProjection } from './utilsProjections.js'
+import { countProjections, createProjectionDefinition, findMultipleProjections, findOneProjection } from './utilsProjections.js'
 import { createSubject, getStreamSubjectFromSubject } from './utilsSubject.js'
 
 describe('createProjectionDefinition', () => {
@@ -247,5 +247,16 @@ describe('findMultipleProjections', () => {
     expect(projections).not.toBeNull()
     expect(projections.length).toBe(30)
     expect(projections[0]!.saltAdded).toEqual(30)
+  })
+
+  // Add a test for countProjections
+  it('should count 30 projections', async () => {
+    const streamFilter = {
+      projectionName: 'testProjection',
+    } as const
+
+    const count = await countProjections(eventStore, testSubjects[0]!, streamFilter)
+
+    expect(count).toBe(30)
   })
 })
