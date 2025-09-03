@@ -12,7 +12,7 @@ export default defineConfig({
     }),
   ],
   build: {
-    target: 'node18',
+    target: 'node20',
     lib: {
       entry: resolve(__dirname, 'index.ts'),
       name: 'Vorfall',
