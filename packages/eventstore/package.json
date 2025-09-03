@@ -32,8 +32,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -b",
-    "build:bundle": "vite build",
+    "build": "vite build",
+    "build:types": "tsc -b",
     "test": "vitest run",
     "lint": "eslint . --ext .ts,.tsx"
   },
@@ -44,6 +44,7 @@
   "devDependencies": {
     "mongodb-memory-server": "catalog:",
     "typescript": "catalog:",
+    "vite-plugin-dts": "4.5.4",
     "vitest": "catalog:",
     "vitest-mock-extended": "catalog:"
   },

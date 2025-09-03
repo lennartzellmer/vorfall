@@ -1,24 +1,29 @@
 import { resolve } from 'node:path'
+import dts from 'vite-plugin-dts'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  plugins: [
+    dts({
+      insertTypesEntry: true,
+      outDir: 'dist',
+      exclude: ['**/*.test.ts', 'vite.config.ts'],
+      rollupTypes: true,
+    }),
+  ],
   build: {
+    target: 'node18',
     lib: {
       entry: resolve(__dirname, 'index.ts'),
-      name: 'VorfallEventStore',
-      fileName: 'vorfall-eventstore',
+      name: 'Vorfall',
+      fileName: 'index',
       formats: ['es', 'cjs'],
     },
     rollupOptions: {
-      external: ['mongodb', 'cloudevents'],
-      output: {
-        globals: {
-          mongodb: 'MongoDB',
-          cloudevents: 'CloudEvents',
-        },
-      },
+      external: ['mongodb', 'cloudevents', 'node:crypto'],
     },
     outDir: 'dist',
+    emptyOutDir: true,
   },
   test: {
     globals: true,
