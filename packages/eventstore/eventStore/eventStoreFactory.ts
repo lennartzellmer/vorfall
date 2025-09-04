@@ -1,5 +1,5 @@
 import type { Collection, PushOperator, UpdateFilter, WithId } from 'mongodb'
-import type { DefaultRecord, DomainEvent, Subject } from '../types/index'
+import type { DomainEvent, Subject } from '../types/index'
 import type { ProjectionDefinition } from '../utils/utilsProjections.types'
 import type { EventStoreOptions, EventStream, ReadStreamResult } from './eventStoreFactory.types'
 import { randomUUID } from 'node:crypto'
@@ -11,36 +11,25 @@ export interface EventStoreInstance<
   TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
 > {
   getInstanceMongoClientWrapper: () => MongoClientWrapper
-  getCollectionBySubject: <
-    EventType extends string = string,
-    EventData extends DefaultRecord = DefaultRecord,
-    EventMetaData extends DefaultRecord | undefined = undefined,
-  >(subject: Subject
-  ) => Collection<EventStream<EventType, EventData, EventMetaData, TProjections>>
-  getEventStreamBySubject: <
-    EventType extends string = string,
-    EventData extends DefaultRecord = DefaultRecord,
-    EventMetaData extends DefaultRecord | undefined = undefined,
-  >(subject: Subject
-  ) => Promise<ReadStreamResult<EventType, EventData, EventMetaData>>
+  getCollectionBySubject: <TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>>(
+    subject: Subject
+  ) => Collection<EventStream<TDomainEvent, TProjections>>
+  getEventStreamBySubject: <TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>>(
+    subject: Subject
+  ) => Promise<ReadStreamResult<TDomainEvent>>
   aggregateStream: <
     State,
-    EventType extends string = string,
-    EventData extends DefaultRecord = DefaultRecord,
-    EventMetaData extends DefaultRecord | undefined = undefined,
+    TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>,
   >(
     streamSubject: Subject,
     options: {
-      evolve: (state: State, event: DomainEvent<EventType, EventData, EventMetaData>) => State
+      evolve: (state: State, event: TDomainEvent) => State
       initialState: () => State
     }
   ) => Promise<State>
-  appendOrCreateStream: <
-    EventType extends string = string,
-    EventData extends DefaultRecord = DefaultRecord,
-    EventMetaData extends DefaultRecord | undefined = undefined,
-  >(events: Array<DomainEvent<EventType, EventData, EventMetaData>>
-  ) => Promise<EventStream<EventType, EventData, EventMetaData, TProjections>>
+  appendOrCreateStream: <TDomainEvent extends DomainEvent<any, any, any>>(
+    events: Array<TDomainEvent>
+  ) => Promise<EventStream<TDomainEvent, TProjections>>
 }
 
 export function createEventStore<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined>(
@@ -54,29 +43,23 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
       return mongoClient
     },
 
-    getCollectionBySubject<
-      EventType extends string = string,
-      EventData extends DefaultRecord = DefaultRecord,
-      EventMetaData extends DefaultRecord | undefined = undefined,
-    >(subject: Subject,
-    ): Collection<EventStream<EventType, EventData, EventMetaData, TProjections>> {
+    getCollectionBySubject<TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>>(
+      subject: Subject,
+    ): Collection<EventStream<TDomainEvent, TProjections>> {
       const collectionName = getCollectionNameFromSubject(subject)
-      return mongoClient.getDatabase().collection<EventStream<EventType, EventData, EventMetaData, TProjections>>(collectionName)
+      return mongoClient.getDatabase().collection<EventStream<TDomainEvent, TProjections>>(collectionName)
     },
 
-    async getEventStreamBySubject<
-      EventType extends string = string,
-      EventData extends DefaultRecord = DefaultRecord,
-      EventMetaData extends DefaultRecord | undefined = undefined,
-    >(subject: Subject,
-    ): Promise<ReadStreamResult<EventType, EventData, EventMetaData>> {
+    async getEventStreamBySubject<TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>>(
+      subject: Subject,
+    ): Promise<ReadStreamResult<TDomainEvent>> {
       const streamSubject = getStreamSubjectFromSubject(subject)
-      const collection = this.getCollectionBySubject<EventType, EventData, EventMetaData>(streamSubject)
+      const collection = this.getCollectionBySubject<TDomainEvent>(streamSubject)
       const filter = {
         streamSubject: { $eq: streamSubject },
       }
       const stream = await collection.findOne<
-        WithId<EventStream<EventType, EventData, EventMetaData, TProjections>>
+        WithId<EventStream<TDomainEvent, TProjections>>
       >(filter, {
         projection: { _id: 0 },
         useBigInt64: true,
@@ -95,18 +78,16 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
 
     async aggregateStream<
       State,
-      EventType extends string = string,
-      EventData extends DefaultRecord = DefaultRecord,
-      EventMetaData extends DefaultRecord | undefined = undefined,
+      TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>,
     >(
       streamSubject: Subject,
       options: {
-        evolve: (state: State, event: DomainEvent<EventType, EventData, EventMetaData>) => State
+        evolve: (state: State, event: TDomainEvent) => State
         initialState: () => State
       },
     ): Promise<State> {
       const { evolve, initialState } = options
-      const { events } = await this.getEventStreamBySubject<EventType, EventData, EventMetaData>(streamSubject)
+      const { events } = await this.getEventStreamBySubject<TDomainEvent>(streamSubject)
       if (!events) {
         return initialState()
       }
@@ -114,13 +95,9 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
       return state
     },
 
-    async appendOrCreateStream<
-      EventType extends string = string,
-      EventData extends DefaultRecord = DefaultRecord,
-      EventMetaData extends DefaultRecord | undefined = undefined,
-    >(
-      events: Array<DomainEvent<EventType, EventData, EventMetaData>>,
-    ): Promise<EventStream<EventType, EventData, EventMetaData, TProjections>> {
+    async appendOrCreateStream<TDomainEvent extends DomainEvent<any, any, any>>(
+      events: Array<TDomainEvent>,
+    ): Promise<EventStream<TDomainEvent, TProjections>> {
       const [firstEvent] = events
 
       if (!firstEvent) {
@@ -134,11 +111,11 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
       const eventSubject = createSubject(firstEvent.subject)
       const streamSubject = getStreamSubjectFromSubject(eventSubject)
 
-      const collection = this.getCollectionBySubject<EventType, EventData, EventMetaData>(streamSubject)
+      const collection = this.getCollectionBySubject<TDomainEvent>(streamSubject)
 
       const now = new Date()
 
-      const updates: UpdateFilter<EventStream<EventType, EventData, EventMetaData, TProjections>> = {
+      const updates: UpdateFilter<EventStream<TDomainEvent, TProjections>> = {
         $setOnInsert: {
           'streamId': randomUUID(),
           'metadata.createdAt': now,
@@ -149,7 +126,7 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
         },
         $push: {
           events: { $each: events },
-        } as PushOperator<EventStream<EventType, EventData, EventMetaData, TProjections>>,
+        } as PushOperator<EventStream<TDomainEvent, TProjections>>,
       }
 
       let result = await collection.findOneAndUpdate(
@@ -176,7 +153,7 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
           setUpdates[`projections.${projection.name}`] = state
         }
 
-        const projectionUpdates: UpdateFilter<EventStream<EventType, EventData, EventMetaData, TProjections>> = { $set: setUpdates }
+        const projectionUpdates: UpdateFilter<EventStream<TDomainEvent, TProjections>> = { $set: setUpdates }
         result = await collection.findOneAndUpdate(
           { streamSubject },
           projectionUpdates,

@@ -6,16 +6,14 @@ export interface CommandHandlerOptions<
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  EventType extends string = string,
-  EventData extends DefaultRecord = DefaultRecord,
-  EventMetaData extends DefaultRecord | undefined = undefined,
+  TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>,
 > {
   eventStore: EventStoreInstance<any>
   initialState: () => State
   command: Command<CommandType, CommandData, CommandMetadata>
-  commandHandlerFunction: CommandHandlerFunction<State, CommandType, CommandData, CommandMetadata, EventType, EventData, EventMetaData>
+  commandHandlerFunction: CommandHandlerFunction<State, CommandType, CommandData, CommandMetadata, TDomainEvent>
   streamSubject: StreamSubject
-  evolve: (state: State, event: DomainEvent<EventType, EventData, EventMetaData>) => State
+  evolve: (state: State, event: TDomainEvent) => State
 }
 
 export type CommandHandlerFunction<
@@ -23,13 +21,11 @@ export type CommandHandlerFunction<
   CommandType extends string = string,
   CommandData extends DefaultRecord | undefined = undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  EventType extends string = string,
-  EventData extends DefaultRecord = DefaultRecord,
-  EventMetaData extends DefaultRecord | undefined = undefined,
+  TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>,
 > = (params: { command: Command<CommandType, CommandData, CommandMetadata>, state?: State }) =>
-  | DomainEvent<EventType, EventData, EventMetaData>
-  | DomainEvent<EventType, EventData, EventMetaData>[]
-  | Promise<DomainEvent<EventType, EventData, EventMetaData>>
-  | Promise<DomainEvent<EventType, EventData, EventMetaData>[]>
+  | TDomainEvent
+  | TDomainEvent[]
+  | Promise<TDomainEvent>
+  | Promise<TDomainEvent[]>
 
 export type DefaultRecord = Record<string, unknown>

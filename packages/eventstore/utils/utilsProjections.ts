@@ -48,7 +48,7 @@ export async function findOneProjection<
   eventStore: EventStoreInstance<TProjections>,
   streamSubject: StreamSubject,
   query: ProjectionQuery<TProjections[number]['name']>,
-): Promise<(EventStream<any, any, any, TProjections> & { projections: NonNullable<EventStream<any, any, any, TProjections>['projections']> }) | null> {
+): Promise<(EventStream<AnyDomainEvent, TProjections> & { projections: NonNullable<EventStream<AnyDomainEvent, TProjections>['projections']> }) | null> {
   const { projectionName, projectionQuery } = query
   const collection = eventStore.getCollectionBySubject(streamSubject)
 
@@ -72,7 +72,7 @@ export async function findOneProjection<
     },
   )
 
-  return result as (EventStream<any, any, any, TProjections> & { projections: NonNullable<EventStream<any, any, any, TProjections>['projections']> }) | null
+  return result as (EventStream<AnyDomainEvent, TProjections> & { projections: NonNullable<EventStream<AnyDomainEvent, TProjections>['projections']> }) | null
 }
 
 /**
@@ -93,7 +93,7 @@ export async function findMultipleProjections<
   query: ProjectionQuery<TProjectionName>,
   queryOptions: ProjectionQueryOptions,
 ): Promise<Array<TProjections extends readonly ProjectionDefinition<any, any, any>[]
-  ? NonNullable<EventStream<any, any, any, TProjections>['projections']>[TProjectionName]
+  ? NonNullable<EventStream<AnyDomainEvent, TProjections>['projections']>[TProjectionName]
   : unknown>> {
   const { projectionName, projectionQuery } = query
 
@@ -109,7 +109,7 @@ export async function findMultipleProjections<
   }
 
   let mongoQuery = collection.find<
-    EventStream<any, any, any, TProjections>
+    EventStream<AnyDomainEvent, TProjections>
   >(
     { $and: filters },
     {
@@ -136,7 +136,7 @@ export async function findMultipleProjections<
   const result = streams.map(stream => stream.projections?.[projectionName]).filter(Boolean)
 
   return result as Array<TProjections extends readonly ProjectionDefinition<any, any, any>[]
-    ? NonNullable<EventStream<any, any, any, TProjections>['projections']>[TProjectionName]
+    ? NonNullable<EventStream<AnyDomainEvent, TProjections>['projections']>[TProjectionName]
     : unknown>
 }
 

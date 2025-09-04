@@ -1,3 +1,4 @@
+import type { DomainEvent } from '../types/domainEvent.types'
 import type { CommandHandlerOptions, DefaultRecord } from './handleCommand.types'
 
 export async function handleCommand<
@@ -5,11 +6,9 @@ export async function handleCommand<
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  EventType extends string = string,
-  EventData extends DefaultRecord = DefaultRecord,
-  EventMetaData extends DefaultRecord | undefined = undefined,
+  TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>,
 >(
-  options: CommandHandlerOptions<State, CommandType, CommandData, CommandMetadata, EventType, EventData, EventMetaData>,
+  options: CommandHandlerOptions<State, CommandType, CommandData, CommandMetadata, TDomainEvent>,
 ): Promise<any> {
   const {
     evolve,
@@ -24,7 +23,7 @@ export async function handleCommand<
    * Interpret the currrent state of the stream
    * using the provided evolve function and initial state
    */
-  const aggregatedStreamState = await eventStore.aggregateStream(streamSubject, {
+  const aggregatedStreamState = await eventStore.aggregateStream<State, TDomainEvent>(streamSubject, {
     evolve,
     initialState,
   })
@@ -36,7 +35,7 @@ export async function handleCommand<
   const result = await commandHandlerFunction({ command, state: aggregatedStreamState })
   const eventsToAppend = Array.isArray(result) ? result : [result]
 
-  const newState = await eventStore.appendOrCreateStream(
+  const newState = await eventStore.appendOrCreateStream<TDomainEvent>(
     eventsToAppend,
   )
 
