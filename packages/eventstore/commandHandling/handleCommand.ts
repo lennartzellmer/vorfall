@@ -1,15 +1,15 @@
-import type { AnyDomainEvent } from '../types/domainEvent.types'
-import type { CommandHandlerOptions, DefaultRecord } from './handleCommand.types'
+import type { EventStream } from '../eventStore/eventStoreFactory.types'
+import type { CommandHandlerOptions, DefaultRecord, InferDomainEventFromCommandHandler } from './handleCommand.types'
 
 export async function handleCommand<
   State,
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
+  TCommandHandlerFunction extends (params: { command: any, state?: State }) => any = (params: { command: any, state?: State }) => any,
 >(
-  options: CommandHandlerOptions<State, CommandType, CommandData, CommandMetadata, TDomainEvent>,
-): Promise<any> {
+  options: CommandHandlerOptions<State, CommandType, CommandData, CommandMetadata, TCommandHandlerFunction>,
+): Promise<EventStream<InferDomainEventFromCommandHandler<TCommandHandlerFunction>, any>> {
   const {
     evolve,
     initialState,
@@ -23,7 +23,7 @@ export async function handleCommand<
    * Interpret the currrent state of the stream
    * using the provided evolve function and initial state
    */
-  const aggregatedStreamState = await eventStore.aggregateStream<State, TDomainEvent>(streamSubject, {
+  const aggregatedStreamState = await eventStore.aggregateStream<State, InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(streamSubject, {
     evolve,
     initialState,
   })
@@ -35,7 +35,7 @@ export async function handleCommand<
   const result = await commandHandlerFunction({ command, state: aggregatedStreamState })
   const eventsToAppend = Array.isArray(result) ? result : [result]
 
-  const newState = await eventStore.appendOrCreateStream<TDomainEvent>(
+  const newState = await eventStore.appendOrCreateStream<InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(
     eventsToAppend,
   )
 
