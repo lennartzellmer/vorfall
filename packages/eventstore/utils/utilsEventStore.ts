@@ -1,5 +1,5 @@
 import type { EventStream } from '../eventStore/eventStoreFactory.types'
-import type { DefaultRecord, DomainEvent, Subject } from '../types/index'
+import type { AnyDomainEvent, DefaultRecord, DomainEvent, Subject } from '../types/index'
 import { randomUUID } from 'node:crypto'
 import { CloudEvent } from 'cloudevents'
 import { createSubject, getStreamSubjectFromSubject } from './utilsSubject'
@@ -73,7 +73,7 @@ export function createDomainEvent<
  * @param events The array of DomainEvents to create the EventStream from
  * @returns An EventStream containing the provided events
  */
-export function createEventStream<TDomainEvent extends DomainEvent<any, any, any>>(
+export function createEventStream<TDomainEvent extends AnyDomainEvent>(
   events: Array<TDomainEvent>,
 ): EventStream<TDomainEvent> {
   const firstEvent = events[0]

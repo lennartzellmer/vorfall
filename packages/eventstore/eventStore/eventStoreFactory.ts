@@ -1,5 +1,5 @@
 import type { Collection, PushOperator, UpdateFilter, WithId } from 'mongodb'
-import type { DomainEvent, Subject } from '../types/index'
+import type { AnyDomainEvent, Subject } from '../types/index'
 import type { ProjectionDefinition } from '../utils/utilsProjections.types'
 import type { EventStoreOptions, EventStream, ReadStreamResult } from './eventStoreFactory.types'
 import { randomUUID } from 'node:crypto'
@@ -11,15 +11,15 @@ export interface EventStoreInstance<
   TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
 > {
   getInstanceMongoClientWrapper: () => MongoClientWrapper
-  getCollectionBySubject: <TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>>(
+  getCollectionBySubject: <TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
     subject: Subject
   ) => Collection<EventStream<TDomainEvent, TProjections>>
-  getEventStreamBySubject: <TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>>(
+  getEventStreamBySubject: <TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
     subject: Subject
   ) => Promise<ReadStreamResult<TDomainEvent>>
   aggregateStream: <
     State,
-    TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>,
+    TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
   >(
     streamSubject: Subject,
     options: {
@@ -27,7 +27,7 @@ export interface EventStoreInstance<
       initialState: () => State
     }
   ) => Promise<State>
-  appendOrCreateStream: <TDomainEvent extends DomainEvent<any, any, any>>(
+  appendOrCreateStream: <TDomainEvent extends AnyDomainEvent>(
     events: Array<TDomainEvent>
   ) => Promise<EventStream<TDomainEvent, TProjections>>
 }
@@ -43,14 +43,14 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
       return mongoClient
     },
 
-    getCollectionBySubject<TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>>(
+    getCollectionBySubject<TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
       subject: Subject,
     ): Collection<EventStream<TDomainEvent, TProjections>> {
       const collectionName = getCollectionNameFromSubject(subject)
       return mongoClient.getDatabase().collection<EventStream<TDomainEvent, TProjections>>(collectionName)
     },
 
-    async getEventStreamBySubject<TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>>(
+    async getEventStreamBySubject<TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
       subject: Subject,
     ): Promise<ReadStreamResult<TDomainEvent>> {
       const streamSubject = getStreamSubjectFromSubject(subject)
@@ -78,7 +78,7 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
 
     async aggregateStream<
       State,
-      TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>,
+      TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
     >(
       streamSubject: Subject,
       options: {
@@ -95,7 +95,7 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
       return state
     },
 
-    async appendOrCreateStream<TDomainEvent extends DomainEvent<any, any, any>>(
+    async appendOrCreateStream<TDomainEvent extends AnyDomainEvent>(
       events: Array<TDomainEvent>,
     ): Promise<EventStream<TDomainEvent, TProjections>> {
       const [firstEvent] = events

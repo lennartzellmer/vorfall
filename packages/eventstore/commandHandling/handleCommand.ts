@@ -1,4 +1,4 @@
-import type { DomainEvent } from '../types/domainEvent.types'
+import type { AnyDomainEvent } from '../types/domainEvent.types'
 import type { CommandHandlerOptions, DefaultRecord } from './handleCommand.types'
 
 export async function handleCommand<
@@ -6,7 +6,7 @@ export async function handleCommand<
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>,
+  TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
 >(
   options: CommandHandlerOptions<State, CommandType, CommandData, CommandMetadata, TDomainEvent>,
 ): Promise<any> {

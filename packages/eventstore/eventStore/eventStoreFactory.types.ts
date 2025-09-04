@@ -1,5 +1,5 @@
 import type { Document, Filter } from 'mongodb'
-import type { DomainEvent, StreamSubject } from '../types/index'
+import type { AnyDomainEvent, StreamSubject } from '../types/index'
 import type { ProjectionDefinition } from '../utils/utilsProjections.types'
 
 export interface EventStoreOptions<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined> {
@@ -8,7 +8,7 @@ export interface EventStoreOptions<TProjections extends readonly ProjectionDefin
 }
 
 export interface EventStream<
-  TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>,
+  TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
   P extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
 > {
   streamId: string
@@ -24,7 +24,7 @@ export interface EventStream<
 }
 
 export interface ReadStreamResult<
-  TDomainEvent extends DomainEvent<any, any, any> = DomainEvent<any, any, any>,
+  TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
 > {
   events: Array<TDomainEvent>
   streamExists: boolean
