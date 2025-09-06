@@ -11,9 +11,9 @@ export async function handleCommand<
   options: CommandHandlerOptions<State, CommandType, CommandData, CommandMetadata, TCommandHandlerFunction>,
 ): Promise<EventStream<InferDomainEventFromCommandHandler<TCommandHandlerFunction>, any>> {
   const {
+    eventStore,
     evolve,
     initialState,
-    eventStore,
     streamSubject,
     commandHandlerFunction,
     command,
