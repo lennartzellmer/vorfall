@@ -27,8 +27,8 @@ describe('handleCommand', () => {
       counter: number
     }
 
-    const evolve = vi.fn(state => ({ ...state, counter: state.counter + 1 }))
-    const initialState = vi.fn(() => ({ test: 0 }))
+    const evolve = (state: AggregatedState) => ({ ...state, counter: state.counter + 1 })
+    const initialState = () => ({ test: 0, counter: 0 })
 
     const mockedAggregatedState: AggregatedState = { counter: 42 }
     const mockedNewState = createEventStream([counterIncrementedEvent])
@@ -88,8 +88,8 @@ describe('handleCommand', () => {
       counter: number
     }
 
-    const evolve = vi.fn(state => ({ ...state, counter: state.counter + 1 }))
-    const initialState = vi.fn(() => ({ test: 0 }))
+    const evolve = (state: AggregatedState) => ({ ...state, counter: state.counter + 1 })
+    const initialState = () => ({ test: 0, counter: 0 })
 
     const mockedAggregatedState: AggregatedState = { counter: 10 }
     const mockedNewState = createEventStream([counterIncrementedEvent])
@@ -161,8 +161,11 @@ describe('handleCommand', () => {
       counter: number
     }
 
-    const evolve = vi.fn(state => ({ ...state, counter: state.counter + 1 }))
-    const initialState = vi.fn(() => ({ test: 0 }))
+    const evolve = (state: AggregatedState, event: CounterIncrementedEvent) => ({
+      ...state,
+      counter: state.counter + event.data.incrementedBy,
+    })
+    const initialState = () => ({ test: 0, counter: 0 })
 
     const mockedAggregatedState: AggregatedState = { counter: 5 }
     const mockedNewState = createEventStream([counterIncrementedEvent1, counterIncrementedEvent2])
