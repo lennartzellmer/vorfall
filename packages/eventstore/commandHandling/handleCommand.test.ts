@@ -56,10 +56,12 @@ describe('handleCommand', () => {
     )
 
     const result = await handleCommand({
-      evolve,
-      initialState,
+      streams: [{
+        evolve,
+        initialState,
+        streamSubject,
+      }],
       eventStore: mockEventStore,
-      streamSubject,
       commandHandlerFunction,
       command: incrementCounterCommand,
     })
@@ -68,7 +70,7 @@ describe('handleCommand', () => {
       evolve,
       initialState,
     })
-    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementCounterCommand, state: mockedAggregatedState })
+    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementCounterCommand, states: new Map([[streamSubject, mockedAggregatedState]]) })
     expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith([counterIncrementedEvent])
     expect(result).toBe(mockedNewState)
   })
@@ -126,10 +128,12 @@ describe('handleCommand', () => {
     )
 
     const result = await handleCommand({
-      evolve,
-      initialState,
+      streams: [{
+        evolve,
+        initialState,
+        streamSubject,
+      }],
       eventStore: mockEventStore,
-      streamSubject,
       commandHandlerFunction,
       command: incrementCounterCommand,
     })
@@ -138,7 +142,7 @@ describe('handleCommand', () => {
       evolve,
       initialState,
     })
-    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementCounterCommand, state: mockedAggregatedState })
+    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementCounterCommand, states: new Map([[streamSubject, mockedAggregatedState]]) })
     expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith([counterIncrementedEvent])
     expect(result).toBe(mockedNewState)
   })
@@ -212,10 +216,12 @@ describe('handleCommand', () => {
     )
 
     const result = await handleCommand({
-      evolve,
-      initialState,
+      streams: [{
+        evolve,
+        initialState,
+        streamSubject,
+      }],
       eventStore: mockEventStore,
-      streamSubject,
       commandHandlerFunction,
       command: incrementTwiceCommand,
     })
@@ -224,8 +230,49 @@ describe('handleCommand', () => {
       evolve,
       initialState,
     })
-    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementTwiceCommand, state: mockedAggregatedState })
+    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementTwiceCommand, states: new Map([[streamSubject, mockedAggregatedState]]) })
     expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith([counterIncrementedEvent1, counterIncrementedEvent2])
     expect(result).toBe(mockedNewState)
+  })
+
+  it('should handle command handler function when provided with multiple streams', async () => {
+    const mockEventStore = {
+      aggregateStream: vi.fn(),
+      appendOrCreateStream: vi.fn(),
+    } as MockedObject<EventStoreInstance>
+
+    const streamSubject1 = createStreamSubject('test/stream/123')
+    const streamSubject2 = createStreamSubject('test/stream/456')
+
+    type CounterIncrementedEvent = DomainEvent<'counter.incremented', { incrementedBy: number }>
+
+    const counterIncrementedEvent1: CounterIncrementedEvent = createDomainEvent({
+      type: 'counter.incremented',
+      subject: streamSubject1,
+      data: { incrementedBy: 5 },
+    })
+
+    const counterIncrementedEvent2: CounterIncrementedEvent = createDomainEvent({
+      type: 'counter.incremented',
+      subject: streamSubject2,
+      data: { incrementedBy: 10 },
+    })
+
+    interface AggregatedState {
+      counter: number
+    }
+
+    const evolve = (state: AggregatedState, event: CounterIncrementedEvent) => ({
+      ...state,
+      counter: state.counter + event.data.incrementedBy,
+    })
+
+    const mockedAggregatedState: AggregatedState = { counter: 5 }
+
+    const mockedNewState = {
+      streams: [createEventStream([counterIncrementedEvent1, counterIncrementedEvent2])],
+      totalEventsAppended: 2,
+      streamSubjects: [streamSubject1, streamSubject2],
+    }
   })
 })

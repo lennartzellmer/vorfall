@@ -21,11 +21,13 @@ export interface CommandHandlerOptions<
   TCommandHandlerFunction extends CommandHandlerFunction<State, CommandType, CommandData, CommandMetadata, any> = CommandHandlerFunction<State, CommandType, CommandData, CommandMetadata, any>,
 > {
   eventStore: EventStoreInstance<any>
-  initialState: () => State
+  streams: Array<{
+    initialState: () => State
+    streamSubject: StreamSubject
+    evolve: (state: State, event: InferDomainEventFromCommandHandler<TCommandHandlerFunction>) => State
+  }>
   command: Command<CommandType, CommandData, CommandMetadata>
   commandHandlerFunction: TCommandHandlerFunction
-  streamSubject: StreamSubject
-  evolve: (state: State, event: InferDomainEventFromCommandHandler<TCommandHandlerFunction>) => State
 }
 
 export type CommandHandlerFunction<
