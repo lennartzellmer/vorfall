@@ -1,4 +1,4 @@
-import type { ClientSession, Collection, PushOperator, UpdateFilter, WithId } from 'mongodb'
+import type { ClientSession, Collection, PushOperator, UpdateFilter } from 'mongodb'
 import type { AnyDomainEvent, StreamSubject, Subject } from '../types/index'
 import type { ProjectionDefinition } from '../utils/utilsProjections.types'
 import type { EventStoreOptions, EventStream, MultiStreamAppendResult, ReadStreamResult } from './eventStoreFactory.types'
