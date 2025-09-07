@@ -1,7 +1,7 @@
 import type { DomainEvent } from '../types/index'
 import type { EventStoreInstance } from './eventStoreFactory'
 import { CloudEvent } from 'cloudevents'
-import { MongoMemoryServer } from 'mongodb-memory-server'
+import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createDomainEvent, createEventStream } from '../utils/utilsEventStore'
 import { createProjectionDefinition } from '../utils/utilsProjections'
@@ -9,7 +9,7 @@ import { createSubject, getStreamSubjectFromSubject } from '../utils/utilsSubjec
 import { createEventStore } from './eventStoreFactory'
 
 describe('mongoClientWrapper Integration Tests', () => {
-  let mongod: MongoMemoryServer
+  let replSet: MongoMemoryReplSet
   let eventStore: EventStoreInstance
   let connectionString: string
 
@@ -24,9 +24,11 @@ describe('mongoClientWrapper Integration Tests', () => {
   const eventStream = createEventStream([testEvent])
 
   beforeAll(async () => {
-    // Start in-memory MongoDB
-    mongod = await MongoMemoryServer.create()
-    connectionString = mongod.getUri()
+    // Start in-memory MongoDB replica set for transaction support
+    replSet = await MongoMemoryReplSet.create({
+      replSet: { count: 3 }, // Create a replica set with 3 members
+    })
+    connectionString = replSet.getUri()
     eventStore = createEventStore({ connectionString })
     await eventStore.getInstanceMongoClientWrapper().waitForConnection()
   })
@@ -41,8 +43,8 @@ describe('mongoClientWrapper Integration Tests', () => {
   })
 
   afterAll(async () => {
-    // Clean shutdown
-    await mongod.stop()
+    await eventStore.getInstanceMongoClientWrapper().close()
+    await replSet.stop()
   })
 
   describe('getEventStreamBySubject', () => {
@@ -74,10 +76,15 @@ describe('mongoClientWrapper Integration Tests', () => {
       const result = await eventStore.appendOrCreateStream([testEvent])
 
       expect(result).toBeDefined()
-      expect(result.streamId).toBeDefined()
-      expect(result.streamSubject).toBe(streamSubject)
-      expect(result.events.length).toBe(1)
-      expect(createDomainEvent(result.events[0]!)).toMatchObject(testEvent)
+      expect(result.totalEventsAppended).toBe(1)
+      expect(result.streamSubjects).toEqual([streamSubject])
+      expect(result.streams.length).toBe(1)
+
+      const stream = result.streams[0]!
+      expect(stream.streamId).toBeDefined()
+      expect(stream.streamSubject).toBe(streamSubject)
+      expect(stream.events.length).toBe(1)
+      expect(createDomainEvent(stream.events[0]!)).toMatchObject(testEvent)
     })
 
     it('should append an event to an existing stream', async () => {
@@ -96,11 +103,16 @@ describe('mongoClientWrapper Integration Tests', () => {
       const result = await eventStore.appendOrCreateStream([newEvent])
 
       expect(result).toBeDefined()
-      expect(result.streamId).toBeDefined()
-      expect(result.streamSubject).toBe(streamSubject)
-      expect(result.metadata.createdAt.valueOf()).toBeLessThan(result.metadata.updatedAt.valueOf())
-      expect(result.events.length).toBe(2)
-      expect(createDomainEvent(result.events[1]!)).toMatchObject(newEvent)
+      expect(result.totalEventsAppended).toBe(1)
+      expect(result.streamSubjects).toEqual([streamSubject])
+      expect(result.streams.length).toBe(1)
+
+      const stream = result.streams[0]!
+      expect(stream.streamId).toBeDefined()
+      expect(stream.streamSubject).toBe(streamSubject)
+      expect(stream.metadata.createdAt.valueOf()).toBeLessThan(stream.metadata.updatedAt.valueOf())
+      expect(stream.events.length).toBe(2)
+      expect(createDomainEvent(stream.events[1]!)).toMatchObject(newEvent)
     })
 
     it('should store a projection when configured', async () => {
@@ -114,11 +126,11 @@ describe('mongoClientWrapper Integration Tests', () => {
       })
 
       const testeventStore = createEventStore({ connectionString, projections: [projectionDefinition] })
-      await eventStore.getInstanceMongoClientWrapper().waitForConnection()
+      await testeventStore.getInstanceMongoClientWrapper().waitForConnection()
 
       const result = await testeventStore.appendOrCreateStream([testEvent])
 
-      expect(result.projections?.TestProjection).toEqual({ count: 1 })
+      expect(result.streams[0]?.projections?.TestProjection).toEqual({ count: 1 })
     })
     it('should update an already existing projection', async () => {
       const projectionDefinition = createProjectionDefinition({
@@ -131,15 +143,104 @@ describe('mongoClientWrapper Integration Tests', () => {
       })
 
       const testeventStore = createEventStore({ connectionString, projections: [projectionDefinition] })
-      await eventStore.getInstanceMongoClientWrapper().waitForConnection()
+      await testeventStore.getInstanceMongoClientWrapper().waitForConnection()
 
       const result = await testeventStore.appendOrCreateStream([testEvent])
 
-      expect(result.projections?.TestProjection).toEqual({ count: 1 })
+      expect(result.streams[0]?.projections?.TestProjection).toEqual({ count: 1 })
 
       const result2 = await testeventStore.appendOrCreateStream([testEvent])
 
-      expect(result2.projections?.TestProjection).toEqual({ count: 2 })
+      expect(result2.streams[0]?.projections?.TestProjection).toEqual({ count: 2 })
+    })
+
+    it('should handle events from multiple different streams in a single transaction', async () => {
+      // Create events for different streams
+      const stream1Subject = createSubject('veranstaltung/123/erstellt')
+      const stream2Subject = createSubject('teilnehmer/456/angemeldet')
+
+      const event1 = createDomainEvent({
+        type: 'veranstaltung.erstellt',
+        subject: stream1Subject,
+        data: { name: 'Event 1' },
+      })
+
+      const event2 = createDomainEvent({
+        type: 'teilnehmer.angemeldet',
+        subject: stream2Subject,
+        data: { name: 'Participant 1' },
+      })
+
+      const event3 = createDomainEvent({
+        type: 'veranstaltung.aktualisiert',
+        subject: stream1Subject,
+        data: { name: 'Event 1 Updated' },
+      })
+
+      // Append events from different streams
+      const result = await eventStore.appendOrCreateStream([event1, event2, event3])
+
+      expect(result).toBeDefined()
+      expect(result.totalEventsAppended).toBe(3)
+      expect(result.streamSubjects.length).toBe(2)
+      expect(result.streams.length).toBe(2)
+
+      // Find streams by subject
+      const stream1 = result.streams.find(s => s.streamSubject === getStreamSubjectFromSubject(stream1Subject))
+      const stream2 = result.streams.find(s => s.streamSubject === getStreamSubjectFromSubject(stream2Subject))
+
+      expect(stream1).toBeDefined()
+      expect(stream2).toBeDefined()
+
+      // Stream 1 should have 2 events (event1 and event3)
+      expect(stream1!.events.length).toBe(2)
+      expect(stream1!.events[0]!.type).toBe('veranstaltung.erstellt')
+      expect(stream1!.events[1]!.type).toBe('veranstaltung.aktualisiert')
+
+      // Stream 2 should have 1 event (event2)
+      expect(stream2!.events.length).toBe(1)
+      expect(stream2!.events[0]!.type).toBe('teilnehmer.angemeldet')
+    })
+
+    it('should handle multiple streams with projections correctly', async () => {
+      const projectionDefinition = createProjectionDefinition({
+        name: 'EventCountProjection',
+        canHandle: ['veranstaltung.erstellt', 'teilnehmer.angemeldet'],
+        evolve: (state: { count: number }) => {
+          return { count: state.count + 1 }
+        },
+        initialState: () => ({ count: 0 }),
+      })
+
+      const testEventStore = createEventStore({ connectionString, projections: [projectionDefinition] })
+      await testEventStore.getInstanceMongoClientWrapper().waitForConnection()
+
+      // Create events for different streams
+      const stream1Subject = createSubject('veranstaltung/789/erstellt')
+      const stream2Subject = createSubject('teilnehmer/101/angemeldet')
+
+      const event1 = createDomainEvent({
+        type: 'veranstaltung.erstellt',
+        subject: stream1Subject,
+        data: { name: 'Event 789' },
+      })
+
+      const event2 = createDomainEvent({
+        type: 'teilnehmer.angemeldet',
+        subject: stream2Subject,
+        data: { name: 'Participant 101' },
+      })
+
+      const result = await testEventStore.appendOrCreateStream([event1, event2])
+
+      expect(result.streams.length).toBe(2)
+
+      // Both streams should have their projections updated
+      const stream1 = result.streams.find(s => s.streamSubject === getStreamSubjectFromSubject(stream1Subject))
+      const stream2 = result.streams.find(s => s.streamSubject === getStreamSubjectFromSubject(stream2Subject))
+
+      expect(stream1?.projections?.EventCountProjection).toEqual({ count: 1 })
+      expect(stream2?.projections?.EventCountProjection).toEqual({ count: 1 })
     })
   })
 

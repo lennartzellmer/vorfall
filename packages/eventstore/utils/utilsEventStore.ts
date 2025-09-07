@@ -1,5 +1,5 @@
 import type { EventStream } from '../eventStore/eventStoreFactory.types'
-import type { AnyDomainEvent, DefaultRecord, DomainEvent, Subject } from '../types/index'
+import type { AnyDomainEvent, DefaultRecord, DomainEvent, StreamSubject, Subject } from '../types/index'
 import { randomUUID } from 'node:crypto'
 import { CloudEvent } from 'cloudevents'
 import { createSubject, getStreamSubjectFromSubject } from './utilsSubject'
@@ -94,4 +94,27 @@ export function createEventStream<TDomainEvent extends AnyDomainEvent>(
     },
     projections: undefined,
   }
+}
+
+/**
+ * Groups events by their stream subject
+ * @template TDomainEvent The DomainEvent type
+ * @param events The array of events to group
+ * @returns A Map where keys are stream subjects and values are arrays of events for that stream
+ */
+export function groupEventsByStreamSubject<TDomainEvent extends AnyDomainEvent>(
+  events: Array<TDomainEvent>,
+): Map<StreamSubject, Array<TDomainEvent>> {
+  const eventGroups = new Map<StreamSubject, Array<TDomainEvent>>()
+
+  for (const event of events) {
+    const streamSubject = getStreamSubjectFromSubject(event.subject)
+
+    if (!eventGroups.has(streamSubject)) {
+      eventGroups.set(streamSubject, [])
+    }
+    eventGroups.get(streamSubject)!.push(event)
+  }
+
+  return eventGroups
 }
