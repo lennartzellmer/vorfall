@@ -1,6 +1,6 @@
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
 import type { DomainEvent } from '../types'
-import { MongoMemoryServer } from 'mongodb-memory-server'
+import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createEventStore } from '../eventStore/eventStoreFactory'
 import { createDomainEvent } from './utilsEventStore'
@@ -40,7 +40,7 @@ describe('createProjectionDefinition', () => {
 })
 
 describe('findSingleProjection', () => {
-  let mongod: MongoMemoryServer
+  let replSet: MongoMemoryReplSet
   let eventStore: EventStoreInstance<typeof projectionDefinition[]>
   let connectionString: string
 
@@ -64,9 +64,11 @@ describe('findSingleProjection', () => {
   })
 
   beforeAll(async () => {
-    // Start in-memory MongoDB
-    mongod = await MongoMemoryServer.create()
-    connectionString = mongod.getUri()
+    // Start in-memory MongoDB replica set for transaction support
+    replSet = await MongoMemoryReplSet.create({
+      replSet: { count: 3 }, // Create a replica set with 3 members
+    })
+    connectionString = replSet.getUri()
     eventStore = createEventStore({ connectionString, projections: [projectionDefinition] })
     await eventStore.getInstanceMongoClientWrapper().waitForConnection()
   })
@@ -81,8 +83,8 @@ describe('findSingleProjection', () => {
   })
 
   afterAll(async () => {
-    // Clean shutdown
-    await mongod.stop()
+    await eventStore.getInstanceMongoClientWrapper().close()
+    await replSet.stop()
   })
 
   it('should find one projection by stream subject and projection name', async () => {
@@ -126,7 +128,7 @@ describe('findSingleProjection', () => {
 })
 
 describe('findMultipleProjections', () => {
-  let mongod: MongoMemoryServer
+  let replSet: MongoMemoryReplSet
   let eventStore: EventStoreInstance<typeof projectionDefinitions>
   let connectionString: string
 
@@ -165,9 +167,11 @@ describe('findMultipleProjections', () => {
   const projectionDefinitions = [projectionDefinition, projectionDefinition2] as const
 
   beforeAll(async () => {
-    // Start in-memory MongoDB
-    mongod = await MongoMemoryServer.create()
-    connectionString = mongod.getUri()
+    // Start in-memory MongoDB replica set for transaction support
+    replSet = await MongoMemoryReplSet.create({
+      replSet: { count: 3 }, // Create a replica set with 3 members
+    })
+    connectionString = replSet.getUri()
     eventStore = createEventStore({ connectionString, projections: projectionDefinitions })
     await eventStore.getInstanceMongoClientWrapper().waitForConnection()
 
@@ -177,8 +181,8 @@ describe('findMultipleProjections', () => {
   })
 
   afterAll(async () => {
-    // Clean shutdown
-    await mongod.stop()
+    await eventStore.getInstanceMongoClientWrapper().close()
+    await replSet.stop()
   })
 
   it('should find 30 projections', async () => {

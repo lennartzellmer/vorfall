@@ -133,7 +133,7 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
         streamSubject: { $eq: streamSubject },
       }
       const stream = await collection.findOne<
-        WithId<EventStream<TDomainEvent, TProjections>>
+        EventStream<TDomainEvent, TProjections>
       >(filter, {
         projection: { _id: 0 },
         useBigInt64: true,
@@ -232,8 +232,6 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
 
           return streamResults
         })
-
-        console.log('results', results)
 
         return {
           streams: results,

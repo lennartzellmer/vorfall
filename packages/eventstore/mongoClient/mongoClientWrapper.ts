@@ -16,8 +16,13 @@ export class MongoClientWrapper {
     this.retryDelayMs = config.retryDelayMs ?? 1000
     this.databaseName = config.databaseName ?? 'default'
 
-    // Create client with bufferMaxEntries to enable buffering
     this.client = new MongoClient(config.connectionString, {
+      readPreference: 'primary',
+      writeConcern: { w: 'majority', j: true },
+      readConcern: { level: 'majority' },
+      serverSelectionTimeoutMS: 30000,
+      connectTimeoutMS: 30000,
+      maxPoolSize: 10,
       ...config.options,
     })
 

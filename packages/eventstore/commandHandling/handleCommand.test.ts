@@ -31,7 +31,11 @@ describe('handleCommand', () => {
     const initialState = () => ({ test: 0, counter: 0 })
 
     const mockedAggregatedState: AggregatedState = { counter: 42 }
-    const mockedNewState = createEventStream([counterIncrementedEvent])
+    const mockedNewState = {
+      streams: [createEventStream([counterIncrementedEvent])],
+      totalEventsAppended: 1,
+      streamSubjects: [streamSubject],
+    }
 
     mockEventStore.aggregateStream.mockResolvedValue(mockedAggregatedState)
     mockEventStore.appendOrCreateStream.mockResolvedValue(mockedNewState)
@@ -92,7 +96,11 @@ describe('handleCommand', () => {
     const initialState = () => ({ test: 0, counter: 0 })
 
     const mockedAggregatedState: AggregatedState = { counter: 10 }
-    const mockedNewState = createEventStream([counterIncrementedEvent])
+    const mockedNewState = {
+      streams: [createEventStream([counterIncrementedEvent])],
+      totalEventsAppended: 1,
+      streamSubjects: [streamSubject],
+    }
 
     mockEventStore.aggregateStream.mockResolvedValue(mockedAggregatedState)
     mockEventStore.appendOrCreateStream.mockResolvedValue(mockedNewState)
@@ -168,7 +176,11 @@ describe('handleCommand', () => {
     const initialState = () => ({ test: 0, counter: 0 })
 
     const mockedAggregatedState: AggregatedState = { counter: 5 }
-    const mockedNewState = createEventStream([counterIncrementedEvent1, counterIncrementedEvent2])
+    const mockedNewState = {
+      streams: [createEventStream([counterIncrementedEvent1, counterIncrementedEvent2])],
+      totalEventsAppended: 2,
+      streamSubjects: [streamSubject],
+    }
 
     mockEventStore.aggregateStream.mockResolvedValue(mockedAggregatedState)
     mockEventStore.appendOrCreateStream.mockResolvedValue(mockedNewState)

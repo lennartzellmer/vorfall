@@ -1,4 +1,4 @@
-import type { EventStream } from '../eventStore/eventStoreFactory.types'
+import type { MultiStreamAppendResult } from '../eventStore/eventStoreFactory.types'
 import type { CommandHandlerOptions, DefaultRecord, InferDomainEventFromCommandHandler } from './handleCommand.types'
 
 export async function handleCommand<
@@ -9,7 +9,7 @@ export async function handleCommand<
   TCommandHandlerFunction extends (params: { command: any, state?: State }) => any = (params: { command: any, state?: State }) => any,
 >(
   options: CommandHandlerOptions<State, CommandType, CommandData, CommandMetadata, TCommandHandlerFunction>,
-): Promise<EventStream<InferDomainEventFromCommandHandler<TCommandHandlerFunction>, any>> {
+): Promise<MultiStreamAppendResult<InferDomainEventFromCommandHandler<TCommandHandlerFunction>, any>> {
   const {
     eventStore,
     evolve,
