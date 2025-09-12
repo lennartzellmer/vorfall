@@ -155,6 +155,8 @@ describe('mongoClientWrapper Integration Tests', () => {
     })
 
     it('should handle events from multiple different streams in a single transaction', async () => {
+      // TODO: Test negative case where one of the streams does not exist and transaction should fail
+
       // Create events for different streams
       const stream1Subject = createSubject('veranstaltung/123/erstellt')
       const stream2Subject = createSubject('teilnehmer/456/angemeldet')
