@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createSubject, getCollectionNameFromSubject, getStreamSubjectFromSubject } from './utilsSubject'
+import { createStreamSubject, createSubject, getCollectionNameFromSubject, getStreamSubjectFromSubject } from './utilsSubject'
 
 describe('getStreamSubjectFromSubject', () => {
   it('should return root for valid multi-part subject', () => {
@@ -40,7 +40,7 @@ describe('getCollectionNameFromSubject', () => {
   })
 })
 
-describe('createStreamSubject', () => {
+describe('createSubject', () => {
   it('should handle single part subjects', () => {
     const result = createSubject('user')
     expect(result).toBe('user')
@@ -66,5 +66,32 @@ describe('createStreamSubject', () => {
 
   it('should throw error for empty parts', () => {
     expect(() => createSubject('user//test')).toThrow('Invalid subject format')
+  })
+})
+
+describe('createStreamSubject', () => {
+  it('should throw error for single part subjects', () => {
+    expect(() => createStreamSubject('user')).toThrow('Invalid subject format')
+  })
+
+  it('should throw error for more than 2 parts', () => {
+    expect(() => createStreamSubject('user/123/created')).toThrow('Invalid subject format')
+  })
+
+  it('should throw error for empty subject', () => {
+    expect(() => createStreamSubject('')).toThrow('Invalid subject format')
+  })
+
+  it('should throw error for disallowed characters', () => {
+    expect(() => createStreamSubject('user_test')).toThrow('Invalid subject format')
+  })
+
+  it('should throw error for empty parts', () => {
+    expect(() => createStreamSubject('user//test')).toThrow('Invalid subject format')
+  })
+
+  it('should return the stream subject for a valid subject', () => {
+    const result = createStreamSubject('user/123')
+    expect(result).toBe('user/123')
   })
 })
