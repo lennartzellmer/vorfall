@@ -1,15 +1,15 @@
 import type { MultiStreamAppendResult } from '../eventStore/eventStoreFactory.types'
 import type { StreamSubject } from '../types'
-import type { CommandHandlerOptions, DefaultRecord, InferDomainEventFromCommandHandler } from './handleCommand.types'
+import type { CommandHandlerOptions, DefaultRecord, InferDomainEventFromCommandHandler, StreamConfig } from './handleCommand.types'
 
 export async function handleCommand<
-  State,
+  Streams extends readonly StreamConfig<any, any>[],
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  TCommandHandlerFunction extends (params: { command: any, states?: Map<StreamSubject, State> }) => any = (params: { command: any, states?: Map<StreamSubject, State> }) => any,
+  TCommandHandlerFunction extends (params: { command: any, states?: Map<StreamSubject, any> }) => any = (params: { command: any, states?: Map<StreamSubject, any> }) => any,
 >(
-  options: CommandHandlerOptions<State, CommandType, CommandData, CommandMetadata, TCommandHandlerFunction>,
+  options: CommandHandlerOptions<Streams, CommandType, CommandData, CommandMetadata, TCommandHandlerFunction>,
 ): Promise<MultiStreamAppendResult<InferDomainEventFromCommandHandler<TCommandHandlerFunction>, any>> {
   const {
     eventStore,
@@ -22,9 +22,9 @@ export async function handleCommand<
    * Aggregate the state of the streams
    * using the provided evolve function and initial state
    */
-  const aggregatedStreamStates: Map<StreamSubject, State> = new Map()
+  const aggregatedStreamStates: Map<StreamSubject, any> = new Map()
   for (const stream of streams) {
-    const aggregatedStreamState = await eventStore.aggregateStream<State, InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(stream.streamSubject, {
+    const aggregatedStreamState = await eventStore.aggregateStream<any, InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(stream.streamSubject, {
       evolve: stream.evolve,
       initialState: stream.initialState,
     })

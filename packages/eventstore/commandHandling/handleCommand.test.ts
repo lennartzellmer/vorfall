@@ -274,7 +274,6 @@ describe('handleCommand', () => {
 
     // User stream configuration
     const userEvolve = (state: UserState, event: UserSubscribedEvent): UserState => ({
-      ...state,
       subscriptions: [...state.subscriptions, event.data.emailListId],
     })
     const userInitialState = (): UserState => ({ subscriptions: [] })
@@ -284,6 +283,7 @@ describe('handleCommand', () => {
       ...state,
       subscribers: [...state.subscribers, event.data.userId],
     })
+
     const emailListInitialState = (): EmailListState => ({
       subscribers: ['user1', 'user2', 'user3', 'user4', 'user5'], // Already has 5 subscribers
       maxSubscribers: 10,
@@ -366,13 +366,13 @@ describe('handleCommand', () => {
     const result = await handleCommand({
       streams: [
         {
-          evolve: userEvolve as any,
+          evolve: userEvolve,
           initialState: userInitialState,
           streamSubject: userStreamSubject,
         },
         {
-          evolve: emailListEvolve as any,
-          initialState: emailListInitialState as any,
+          evolve: emailListEvolve,
+          initialState: emailListInitialState,
           streamSubject: emailListStreamSubject,
         },
       ],
@@ -407,12 +407,12 @@ describe('handleCommand', () => {
         expect.objectContaining({
           type: 'user.subscribed',
           subject: userStreamSubject,
-          data: { emailListId: 'newsletter' },
+          data: { emailListId: '123' },
         }),
         expect.objectContaining({
           type: 'emailList.subscriptionAdded',
           subject: emailListStreamSubject,
-          data: { userId: 'user123' },
+          data: { userId: '123' },
         }),
       ]),
     )

@@ -13,30 +13,46 @@ export type InferDomainEventFromCommandHandler<TCommandHandler>
     ? ExtractDomainEventFromReturnType<ReturnType>
     : never
 
+export interface StreamConfig<State, TDomainEvent> {
+  initialState: () => State
+  streamSubject: StreamSubject
+  evolve: (state: State, event: TDomainEvent) => State
+}
+
 export interface CommandHandlerOptions<
-  State,
+  Streams extends readonly StreamConfig<any, any>[],
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  TCommandHandlerFunction extends CommandHandlerFunction<State, CommandType, CommandData, CommandMetadata, any> = CommandHandlerFunction<State, CommandType, CommandData, CommandMetadata, any>,
+  TCommandHandlerFunction extends CommandHandlerFunction<Streams, CommandType, CommandData, CommandMetadata, any> = CommandHandlerFunction<Streams, CommandType, CommandData, CommandMetadata, any>,
 > {
   eventStore: EventStoreInstance<any>
-  streams: Array<{
-    initialState: () => State
-    streamSubject: StreamSubject
-    evolve: (state: State, event: InferDomainEventFromCommandHandler<TCommandHandlerFunction>) => State
-  }>
+  streams: Streams
   command: Command<CommandType, CommandData, CommandMetadata>
   commandHandlerFunction: TCommandHandlerFunction
 }
 
+// Helper type to extract state types from streams array
+type StreamStatesMap<Streams extends readonly StreamConfig<any, any>[]> = {
+  [K in keyof Streams]: Streams[K] extends StreamConfig<infer State, any> ? [Streams[K]['streamSubject'], State] : never
+}[number]
+
+type CreateStatesMap<Streams extends readonly StreamConfig<any, any>[]>
+  = Map<StreamSubject, any> & {
+    [K in StreamStatesMap<Streams> as K extends readonly [infer Subject, any] ? Subject : never]:
+    K extends readonly [any, infer State] ? State : never
+  }
+
 export type CommandHandlerFunction<
-  State,
+  Streams extends readonly StreamConfig<any, any>[],
   CommandType extends string = string,
   CommandData extends DefaultRecord | undefined = undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
   TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
-> = (params: { command: Command<CommandType, CommandData, CommandMetadata>, state?: State }) =>
+> = (params: {
+  command: Command<CommandType, CommandData, CommandMetadata>
+  states?: CreateStatesMap<Streams>
+}) =>
   | TDomainEvent
   | TDomainEvent[]
   | Promise<TDomainEvent>
