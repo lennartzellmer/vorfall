@@ -20,7 +20,7 @@ export async function handleCommand<
 
   /**
    * Aggregate the state of the streams
-   * using the provided evolve function and initial state
+   * using the provided evolve functions and initial states
    */
   const aggregatedStreamStates: Map<Subject, any> = new Map()
   for (const stream of streams) {
