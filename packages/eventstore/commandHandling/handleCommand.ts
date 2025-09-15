@@ -3,7 +3,7 @@ import type { Subject } from '../types/domainEvent.types'
 import type { CommandHandlerOptions, DefaultRecord, InferDomainEventFromCommandHandler, StreamConfig } from './handleCommand.types'
 
 export async function handleCommand<
-  Streams extends readonly StreamConfig<any, any>[],
+  Streams extends ReadonlyArray<StreamConfig<any, any>>,
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,

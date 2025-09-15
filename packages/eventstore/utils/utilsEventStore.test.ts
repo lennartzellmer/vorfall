@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDomainEvent, eventsHaveSameStreamSubject } from './utilsEventStore'
+import { createDomainEvent, eventsHaveSameStreamSubject, groupEventsByStreamSubject } from './utilsEventStore'
 import { createSubject } from './utilsSubject'
 
 describe('createDomainCloudEvent', () => {
@@ -82,5 +82,31 @@ describe('hasSameStreamSubject', () => {
     ]
     const result = eventsHaveSameStreamSubject(events)
     expect(result).toBe(true)
+  })
+})
+
+describe('groupEventsByStreamSubject', () => {
+  const events = [
+    createDomainEvent({
+      type: 'benutzer.erstellt',
+      subject: createSubject('veranstaltung/123'),
+      data: { name: 'John Doe' },
+    }),
+    createDomainEvent({
+      type: 'benutzer.erstellt',
+      subject: createSubject('veranstaltung/456'),
+      data: { name: 'Mr. Doe' },
+    }),
+    createDomainEvent({
+      type: 'benutzer.erstellt',
+      subject: createSubject('veranstaltung/123'),
+      data: { name: 'Jane Doe' },
+    }),
+  ]
+  it('should group events by stream subject', () => {
+    const result = groupEventsByStreamSubject(events)
+    expect(result.size).toBe(2)
+    expect(result.get(createSubject('veranstaltung/123'))?.length).toBe(2)
+    expect(result.get(createSubject('veranstaltung/456'))?.length).toBe(1)
   })
 })

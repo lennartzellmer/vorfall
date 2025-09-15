@@ -106,7 +106,7 @@ export function createEventStream<TDomainEvent extends AnyDomainEvent>(
  */
 export function groupEventsByStreamSubject<TDomainEvent extends AnyDomainEvent>(
   events: Array<TDomainEvent>,
-): Map<Subject, Array<TDomainEvent>> {
+): ReadonlyMap<Subject, Array<TDomainEvent>> {
   const eventGroups = new Map<Subject, Array<TDomainEvent>>()
 
   for (const event of events) {

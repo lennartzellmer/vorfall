@@ -45,7 +45,7 @@ export interface MultiStreamAppendResult<
   TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
   P extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
 > {
-  streams: Array<EventStream<TDomainEvent, P>>
+  streams: ReadonlyArray<EventStream<TDomainEvent, P>>
   totalEventsAppended: number
   streamSubjects: Array<Subject>
 }
