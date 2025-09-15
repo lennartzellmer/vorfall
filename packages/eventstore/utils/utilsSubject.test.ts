@@ -62,7 +62,7 @@ describe('createSubject', () => {
   })
 
   it('should throw error for empty parts', () => {
-    // TODO: Handle this case in typescript → // @ts-expect-error - the function is expected to throw a type error for "user//test"
+    // @ts-expect-error - the function is expected to throw a type error for "user//test"
     expect(() => createSubject('user//test')).toThrow('Invalid subject format')
   })
 })

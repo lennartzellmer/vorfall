@@ -16,8 +16,9 @@ type ValidSubjectError<T>
   = T extends '' ? 'Subject cannot be empty'
     : T extends `/${string}` ? 'Subject cannot start with "/"'
       : T extends `${string}/` ? 'Subject cannot end with "/"'
-        : T extends `${string}/${string}` ? never // Valid case
-          : 'Subject must have multiple parts separated by "/" (entity/id or entity/id/event format)'
+        : T extends `${string}//${string}` ? 'Subject cannot contain empty parts (consecutive slashes)'
+          : T extends `${string}/${string}` ? never // Valid case
+            : 'Subject must have multiple parts separated by "/" (entity/id or entity/id/event format)'
 
 /**
  * Create a subject from a string
@@ -43,8 +44,9 @@ type ValidStreamSubjectError<T>
     : T extends `${string}/${string}/${string}` ? 'StreamSubject must have exactly 2 parts, not 3 or more'
       : T extends `/${string}` ? 'StreamSubject cannot start with "/"'
         : T extends `${string}/` ? 'StreamSubject cannot end with "/"'
-          : T extends `${string}/${string}` ? never // Valid case
-            : 'StreamSubject must have exactly 2 parts separated by "/" (entity/id format)'
+          : T extends `${string}//${string}` ? 'StreamSubject cannot contain empty parts (consecutive slashes)'
+            : T extends `${string}/${string}` ? never // Valid case
+              : 'StreamSubject must have exactly 2 parts separated by "/" (entity/id format)'
 
 /**
  * Create a stream subject from a string
