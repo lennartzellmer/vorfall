@@ -1,5 +1,6 @@
 import type { EventStream } from '../eventStore/eventStoreFactory.types'
 import type { AnyDomainEvent, DefaultRecord, DomainEvent, Subject } from '../types/index'
+import type { StreamSubjectFromSubject } from './utilsSubject'
 import { randomUUID } from 'node:crypto'
 import { CloudEvent } from 'cloudevents'
 import { createSubject, getStreamSubjectFromSubject } from './utilsSubject'
@@ -38,20 +39,21 @@ export function createDomainEvent<
   Type extends string = string,
   EventData extends DefaultRecord | undefined = undefined,
   EventMetaData extends DefaultRecord | undefined = undefined,
+  TSubject extends Subject = Subject,
 >(
   domainCloudEventAttributes: EventMetaData extends undefined
     ? {
         type: Type
-        subject: Subject
+        subject: TSubject
         data?: EventData | undefined
       }
     : {
         type: Type
-        subject: Subject
+        subject: TSubject
         data?: EventData | undefined
         metadata: EventMetaData
       },
-): DomainEvent<Type, EventData, EventMetaData> {
+): DomainEvent<Type, EventData, EventMetaData, TSubject> {
   const DEFAULTS = {
     id: randomUUID(),
     source: 'vorfall.eventsourcing.system',
@@ -62,7 +64,7 @@ export function createDomainEvent<
   } as const
 
   const eventAttributes = { ...DEFAULTS, ...domainCloudEventAttributes }
-  const cloudEvent = new CloudEvent(eventAttributes) as unknown as DomainEvent<Type, EventData, EventMetaData>
+  const cloudEvent = new CloudEvent(eventAttributes) as unknown as DomainEvent<Type, EventData, EventMetaData, TSubject>
 
   return cloudEvent
 }
@@ -98,16 +100,38 @@ export function createEventStream<TDomainEvent extends AnyDomainEvent>(
   }
 }
 
+type StreamSubjectFromEvents<TEvents extends ReadonlyArray<AnyDomainEvent>>
+  = StreamSubjectFromSubject<TEvents[number]['subject']>
+
+type EventsForStream<
+  TEvents extends ReadonlyArray<AnyDomainEvent>,
+  TStream extends Subject,
+> = TEvents[number] extends infer TEvent
+  ? TEvent extends { subject: infer TSubject }
+    ? StreamSubjectFromSubject<TSubject & Subject> extends TStream
+      ? TEvent
+      : never
+    : never
+  : never
+
+interface GroupedEventsByStreamSubjectMap<TEvents extends ReadonlyArray<AnyDomainEvent>>
+  extends ReadonlyMap<StreamSubjectFromEvents<TEvents>, Array<TEvents[number]>> {
+  get: <TStream extends StreamSubjectFromEvents<TEvents>>(
+    key: TStream,
+  ) => Array<EventsForStream<TEvents, TStream>> | undefined
+  has: <TStream extends StreamSubjectFromEvents<TEvents>>(key: TStream) => boolean
+}
+
 /**
  * Groups events by their stream subject
- * @template TDomainEvent The DomainEvent type
+ * @template TEvents The array of events to group
  * @param events The array of events to group
  * @returns A Map where keys are stream subjects and values are arrays of events for that stream
  */
-export function groupEventsByStreamSubject<TDomainEvent extends AnyDomainEvent>(
-  events: ReadonlyArray<TDomainEvent>,
-): ReadonlyMap<Subject, Array<TDomainEvent>> {
-  const eventGroups = new Map<Subject, Array<TDomainEvent>>()
+export function groupEventsByStreamSubject<const TEvents extends ReadonlyArray<AnyDomainEvent>>(
+  events: TEvents,
+): GroupedEventsByStreamSubjectMap<TEvents> {
+  const eventGroups = new Map<Subject, Array<TEvents[number]>>()
 
   for (const event of events) {
     const streamSubject = getStreamSubjectFromSubject(event.subject)
@@ -118,5 +142,5 @@ export function groupEventsByStreamSubject<TDomainEvent extends AnyDomainEvent>(
     eventGroups.get(streamSubject)!.push(event)
   }
 
-  return eventGroups
+  return eventGroups as unknown as GroupedEventsByStreamSubjectMap<TEvents>
 }

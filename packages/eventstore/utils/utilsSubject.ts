@@ -1,4 +1,5 @@
 import type { Subject } from '../types/domainEvent.types'
+import type { Brand } from '../types'
 
 const SUBJECT_REGEX = /^[a-z0-9-]+(?:\/[a-z0-9-]+)+$/i
 const STREAM_SUBJECT_REGEX = /^[a-z0-9-]+\/[a-z0-9-]+$/i
@@ -31,11 +32,11 @@ type ValidSubjectError<T>
  */
 export function createSubject<T extends string>(
   subject: ValidSubjectError<T> extends never ? T : ValidSubjectError<T>,
-): Subject {
+): Brand<T, 'Subject'> {
   if (!subject || !SUBJECT_REGEX.test(subject)) {
     throw new InvalidSubjectFormatError(subject)
   }
-  return subject as unknown as Subject
+  return subject as unknown as Brand<T, 'Subject'>
 }
 
 // Type-level validation for better error messages
@@ -60,11 +61,11 @@ type ValidStreamSubjectError<T>
  */
 export function createStreamSubject<T extends string>(
   subject: ValidStreamSubjectError<T> extends never ? T : ValidStreamSubjectError<T>,
-): Subject {
+): Brand<T, 'Subject'> {
   if (!subject || !STREAM_SUBJECT_REGEX.test(subject as string)) {
     throw new InvalidSubjectFormatError(subject as string, 'entity/id (exactly 2 parts separated by "/")')
   }
-  return subject as unknown as Subject
+  return subject as unknown as Brand<T, 'Subject'>
 }
 
 /**
@@ -73,7 +74,17 @@ export function createStreamSubject<T extends string>(
  * @returns The firt two parts of the subject as a new subject
  * @throws Error if the subject is invalid or does not have a root
  */
-export function getStreamSubjectFromSubject(subject: Subject): Subject {
+type SubjectValue<TSubject extends Subject> = TSubject extends Brand<infer TValue, 'Subject'> ? TValue : never
+
+export type StreamSubjectFromSubject<TSubject extends Subject> = SubjectValue<TSubject> extends `${infer Part1}/${infer Part2}/${string}`
+  ? Brand<`${Part1}/${Part2}`, 'Subject'>
+  : SubjectValue<TSubject> extends `${infer Part1}/${infer Part2}`
+    ? Brand<`${Part1}/${Part2}`, 'Subject'>
+    : never
+
+export function getStreamSubjectFromSubject<TSubject extends Subject>(
+  subject: TSubject,
+): StreamSubjectFromSubject<TSubject> {
   const parts = subject.split('/')
 
   // Must have at least entity/id
@@ -82,7 +93,7 @@ export function getStreamSubjectFromSubject(subject: Subject): Subject {
   }
 
   // Return entity/id (first two parts)
-  return parts.slice(0, 2).join('/') as Subject
+  return parts.slice(0, 2).join('/') as unknown as StreamSubjectFromSubject<TSubject>
 }
 
 /**
