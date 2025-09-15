@@ -1,5 +1,5 @@
 import type { EventStream } from '../eventStore/eventStoreFactory.types'
-import type { AnyDomainEvent, DefaultRecord, DomainEvent, StreamSubject, Subject } from '../types/index'
+import type { AnyDomainEvent, DefaultRecord, DomainEvent, Subject } from '../types/index'
 import { randomUUID } from 'node:crypto'
 import { CloudEvent } from 'cloudevents'
 import { createSubject, getStreamSubjectFromSubject } from './utilsSubject'
@@ -106,8 +106,8 @@ export function createEventStream<TDomainEvent extends AnyDomainEvent>(
  */
 export function groupEventsByStreamSubject<TDomainEvent extends AnyDomainEvent>(
   events: Array<TDomainEvent>,
-): Map<StreamSubject, Array<TDomainEvent>> {
-  const eventGroups = new Map<StreamSubject, Array<TDomainEvent>>()
+): Map<Subject, Array<TDomainEvent>> {
+  const eventGroups = new Map<Subject, Array<TDomainEvent>>()
 
   for (const event of events) {
     const streamSubject = getStreamSubjectFromSubject(event.subject)

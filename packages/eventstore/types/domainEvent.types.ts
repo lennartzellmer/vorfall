@@ -3,8 +3,6 @@ import type { Brand, DefaultRecord } from './index'
 
 export type Subject = Brand<`${string}/${string}`, 'Subject'>
 
-export type StreamSubject = Subject
-
 export type AnyDomainEvent = DomainEvent<any, any, any>
 
 export type DomainEvent<

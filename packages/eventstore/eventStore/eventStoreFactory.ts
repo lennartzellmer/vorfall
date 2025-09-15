@@ -1,5 +1,5 @@
 import type { ClientSession, Collection, PushOperator, UpdateFilter } from 'mongodb'
-import type { AnyDomainEvent, StreamSubject, Subject } from '../types/index'
+import type { AnyDomainEvent, Subject } from '../types/index'
 import type { ProjectionDefinition } from '../utils/utilsProjections.types'
 import type { EventStoreOptions, EventStream, MultiStreamAppendResult, ReadStreamResult } from './eventStoreFactory.types'
 import { randomUUID } from 'node:crypto'
@@ -39,7 +39,7 @@ async function processStreamInTransaction<
   TDomainEvent extends AnyDomainEvent,
   TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
 >(
-  streamSubject: StreamSubject,
+  streamSubject: Subject,
   events: Array<TDomainEvent>,
   collection: Collection<EventStream<TDomainEvent, TProjections>>,
   projections: TProjections,
@@ -181,7 +181,7 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
 
       // If all events belong to the same stream, we can optimize by avoiding transaction overhead
       if (eventGroups.size === 1) {
-        const firstEntry = eventGroups.entries().next().value as [StreamSubject, Array<TDomainEvent>]
+        const firstEntry = eventGroups.entries().next().value as [Subject, Array<TDomainEvent>]
         const [streamSubject, streamEvents] = firstEntry
         const collection = this.getCollectionBySubject<TDomainEvent>(streamSubject)
 

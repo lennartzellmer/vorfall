@@ -1,5 +1,5 @@
 import type { Document, Filter } from 'mongodb'
-import type { AnyDomainEvent, StreamSubject } from '../types/index'
+import type { AnyDomainEvent, Subject } from '../types/index'
 import type { ProjectionDefinition } from '../utils/utilsProjections.types'
 
 export interface EventStoreOptions<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined> {
@@ -12,7 +12,7 @@ export interface EventStream<
   P extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
 > {
   streamId: string
-  streamSubject: StreamSubject
+  streamSubject: Subject
   events: Array<TDomainEvent>
   metadata: {
     createdAt: Date
@@ -35,7 +35,7 @@ export interface ProjectionQuery<TProjectionName extends string> {
   projectionQuery?: Filter<Document>
 }
 
-export interface FindMultipleProjectionQuery<T extends StreamSubject = StreamSubject> {
+export interface FindMultipleProjectionQuery<T extends Subject = Subject> {
   projectionName: string
   streamSubject: T
   streamIds?: string[]
@@ -47,5 +47,5 @@ export interface MultiStreamAppendResult<
 > {
   streams: Array<EventStream<TDomainEvent, P>>
   totalEventsAppended: number
-  streamSubjects: Array<StreamSubject>
+  streamSubjects: Array<Subject>
 }

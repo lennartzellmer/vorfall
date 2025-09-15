@@ -1,6 +1,6 @@
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
 import type { EventStream, ProjectionQuery } from '../eventStore/eventStoreFactory.types'
-import type { AnyDomainEvent, DefaultRecord, StreamSubject, Subject } from '../types/index'
+import type { AnyDomainEvent, DefaultRecord, Subject } from '../types/index'
 import type { CanHandle, ProjectionDefinition, ProjectionQueryOptions } from './utilsProjections.types'
 import { transformFilterForNestedPath } from './utilsMongoFilter'
 
@@ -46,7 +46,7 @@ export async function findOneProjection<
   TProjections extends readonly ProjectionDefinition<any, any, any>[],
 >(
   eventStore: EventStoreInstance<TProjections>,
-  streamSubject: StreamSubject,
+  streamSubject: Subject,
   query: ProjectionQuery<TProjections[number]['name']>,
 ): Promise<(EventStream<AnyDomainEvent, TProjections> & { projections: NonNullable<EventStream<AnyDomainEvent, TProjections>['projections']> }) | null> {
   const { projectionName, projectionQuery } = query

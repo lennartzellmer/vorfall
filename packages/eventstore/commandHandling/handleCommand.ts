@@ -1,5 +1,5 @@
 import type { MultiStreamAppendResult } from '../eventStore/eventStoreFactory.types'
-import type { StreamSubject } from '../types'
+import type { Subject } from '../types/domainEvent.types'
 import type { CommandHandlerOptions, DefaultRecord, InferDomainEventFromCommandHandler, StreamConfig } from './handleCommand.types'
 
 export async function handleCommand<
@@ -7,7 +7,7 @@ export async function handleCommand<
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  TCommandHandlerFunction extends (params: { command: any, states?: Map<StreamSubject, any> }) => any = (params: { command: any, states?: Map<StreamSubject, any> }) => any,
+  TCommandHandlerFunction extends (params: { command: any, states?: Map<Subject, any> }) => any = (params: { command: any, states?: Map<Subject, any> }) => any,
 >(
   options: CommandHandlerOptions<Streams, CommandType, CommandData, CommandMetadata, TCommandHandlerFunction>,
 ): Promise<MultiStreamAppendResult<InferDomainEventFromCommandHandler<TCommandHandlerFunction>, any>> {
@@ -22,7 +22,7 @@ export async function handleCommand<
    * Aggregate the state of the streams
    * using the provided evolve function and initial state
    */
-  const aggregatedStreamStates: Map<StreamSubject, any> = new Map()
+  const aggregatedStreamStates: Map<Subject, any> = new Map()
   for (const stream of streams) {
     const aggregatedStreamState = await eventStore.aggregateStream<any, InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(stream.streamSubject, {
       evolve: stream.evolve,

@@ -1,4 +1,4 @@
-import type { StreamSubject, Subject } from '../types/domainEvent.types'
+import type { Subject } from '../types/domainEvent.types'
 
 const SUBJECT_REGEX = /^[a-z0-9-]+(?:\/[a-z0-9-]+)+$/i
 const STREAM_SUBJECT_REGEX = /^[a-z0-9-]+\/[a-z0-9-]+$/i
@@ -60,11 +60,11 @@ type ValidStreamSubjectError<T>
  */
 export function createStreamSubject<T extends string>(
   subject: ValidStreamSubjectError<T> extends never ? T : ValidStreamSubjectError<T>,
-): StreamSubject {
+): Subject {
   if (!subject || !STREAM_SUBJECT_REGEX.test(subject as string)) {
     throw new InvalidSubjectFormatError(subject as string, 'entity/id (exactly 2 parts separated by "/")')
   }
-  return subject as unknown as StreamSubject
+  return subject as unknown as Subject
 }
 
 /**
@@ -73,7 +73,7 @@ export function createStreamSubject<T extends string>(
  * @returns The firt two parts of the subject as a new subject
  * @throws Error if the subject is invalid or does not have a root
  */
-export function getStreamSubjectFromSubject(subject: Subject): StreamSubject {
+export function getStreamSubjectFromSubject(subject: Subject): Subject {
   const parts = subject.split('/')
 
   // Must have at least entity/id
@@ -82,7 +82,7 @@ export function getStreamSubjectFromSubject(subject: Subject): StreamSubject {
   }
 
   // Return entity/id (first two parts)
-  return parts.slice(0, 2).join('/') as StreamSubject
+  return parts.slice(0, 2).join('/') as Subject
 }
 
 /**
