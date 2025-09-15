@@ -86,25 +86,33 @@ describe('hasSameStreamSubject', () => {
 })
 
 describe('groupEventsByStreamSubject', () => {
+  const event1 = createDomainEvent({
+    type: 'benutzer.erstellt',
+    subject: createSubject('veranstaltung/123'),
+    data: { name: 'John Doe' },
+  })
+  const event2 = createDomainEvent({
+    type: 'benutzer.gelöscht',
+    subject: createSubject('veranstaltung/456'),
+    data: { name: 'Mr. Doe' },
+  })
+  const event3 = createDomainEvent({
+    type: 'besucher.erstellt',
+    subject: createSubject('veranstaltung/123'),
+    data: { name: 'Jane Doe' },
+  })
   const events = [
-    createDomainEvent({
-      type: 'benutzer.erstellt',
-      subject: createSubject('veranstaltung/123'),
-      data: { name: 'John Doe' },
-    }),
-    createDomainEvent({
-      type: 'benutzer.erstellt',
-      subject: createSubject('veranstaltung/456'),
-      data: { name: 'Mr. Doe' },
-    }),
-    createDomainEvent({
-      type: 'benutzer.erstellt',
-      subject: createSubject('veranstaltung/123'),
-      data: { name: 'Jane Doe' },
-    }),
-  ]
+    event1,
+    event2,
+    event3,
+  ] as const
   it('should group events by stream subject', () => {
     const result = groupEventsByStreamSubject(events)
+
+    const _test2 = createSubject('veranstaltung/123')
+
+    const _test = result.get(createSubject('veranstaltung/123'))![0]?.subject
+
     expect(result.size).toBe(2)
     expect(result.get(createSubject('veranstaltung/123'))?.length).toBe(2)
     expect(result.get(createSubject('veranstaltung/456'))?.length).toBe(1)
