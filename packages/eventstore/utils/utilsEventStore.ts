@@ -82,7 +82,9 @@ export function createEventStream<TDomainEvent extends AnyDomainEvent>(
     throw new Error('Cannot create an event stream from an empty array of events')
   }
 
-  const streamSubject = getStreamSubjectFromSubject(createSubject(firstEvent.subject))
+  const subject = createSubject(firstEvent.subject)
+
+  const streamSubject = getStreamSubjectFromSubject(subject)
 
   return {
     streamId: randomUUID(),

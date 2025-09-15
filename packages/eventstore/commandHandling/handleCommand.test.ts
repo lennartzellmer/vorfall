@@ -14,7 +14,7 @@ describe('handleCommand', () => {
       appendOrCreateStream: vi.fn(),
     } as MockedObject<EventStoreInstance>
 
-    const streamSubject = createStreamSubject('test/stream/123')
+    const streamSubject = createStreamSubject('test/123')
 
     type CounterIncrementedEvent = DomainEvent<'counter.incremented', { incrementedBy: number }>
     const counterIncrementedEvent: CounterIncrementedEvent = createDomainEvent({
@@ -81,7 +81,7 @@ describe('handleCommand', () => {
       appendOrCreateStream: vi.fn(),
     } as MockedObject<EventStoreInstance>
 
-    const streamSubject = createStreamSubject('test/stream/456')
+    const streamSubject = createStreamSubject('test/456')
 
     type CounterIncrementedEvent = DomainEvent<'counter.incremented', { incrementedBy: number }>
     const counterIncrementedEvent: CounterIncrementedEvent = createDomainEvent({
@@ -153,7 +153,7 @@ describe('handleCommand', () => {
       appendOrCreateStream: vi.fn(),
     } as MockedObject<EventStoreInstance>
 
-    const streamSubject = createStreamSubject('test/stream/789')
+    const streamSubject = createStreamSubject('test/789')
 
     type CounterIncrementedEvent = DomainEvent<'counter.incremented', { incrementedBy: number }>
 

@@ -13,11 +13,6 @@ describe('getStreamSubjectFromSubject', () => {
     const result = getStreamSubjectFromSubject(validSubject)
     expect(result).toBe('user/123')
   })
-
-  it('should error for single part subjects', () => {
-    const validSubject = createSubject('user')
-    expect(() => getStreamSubjectFromSubject(validSubject)).toThrow('Invalid subject format: "user". Expected format: entity/id or entity/id/event')
-  })
 })
 
 describe('getCollectionNameFromSubject', () => {
@@ -33,19 +28,14 @@ describe('getCollectionNameFromSubject', () => {
     expect(result).toBe('user')
   })
 
-  it('should retrun the root for single part subjects', () => {
-    const validSubject = createSubject('user')
+  it('should return the root for multi-part subjects', () => {
+    const validSubject = createSubject('user/123')
     const result = getCollectionNameFromSubject(validSubject)
     expect(result).toBe('user')
   })
 })
 
 describe('createSubject', () => {
-  it('should handle single part subjects', () => {
-    const result = createSubject('user')
-    expect(result).toBe('user')
-  })
-
   it('should handle multi part subjects', () => {
     const result = createSubject('user/123/created')
     expect(result).toBe('user/123/created')
@@ -56,37 +46,50 @@ describe('createSubject', () => {
     expect(result).toBe('multi-word/123/created-at')
   })
 
+  it('should throw error for single part subjects', () => {
+    // @ts-expect-error - the function is expected to throw a type error for single part subjects
+    expect(() => createSubject('user')).toThrow('Invalid subject format: "user". Expected format: entity/id or entity/id/event (multi-part subjects only)')
+  })
+
   it('should throw error for empty subject', () => {
+    // @ts-expect-error - the function is expected to throw a type error for empty subject
     expect(() => createSubject('')).toThrow('Invalid subject format')
   })
 
   it('should throw error for disallowed characters', () => {
+    // @ts-expect-error - the function is expected to throw a type error for "user_test"
     expect(() => createSubject('user_test')).toThrow('Invalid subject format')
   })
 
   it('should throw error for empty parts', () => {
+    // TODO: Handle this case in typescript → // @ts-expect-error - the function is expected to throw a type error for "user//test"
     expect(() => createSubject('user//test')).toThrow('Invalid subject format')
   })
 })
 
 describe('createStreamSubject', () => {
   it('should throw error for single part subjects', () => {
+    // @ts-expect-error - the function is expected to throw a type error for single part subjects
     expect(() => createStreamSubject('user')).toThrow('Invalid subject format')
   })
 
   it('should throw error for more than 2 parts', () => {
+    // @ts-expect-error - the function is expected to throw a type error for more than 2 parts
     expect(() => createStreamSubject('user/123/created')).toThrow('Invalid subject format')
   })
 
   it('should throw error for empty subject', () => {
+    // @ts-expect-error - the function is expected to throw a type error for empty subject
     expect(() => createStreamSubject('')).toThrow('Invalid subject format')
   })
 
   it('should throw error for disallowed characters', () => {
+    // @ts-expect-error - the function is expected to throw a type error for "user_test"
     expect(() => createStreamSubject('user_test')).toThrow('Invalid subject format')
   })
 
   it('should throw error for empty parts', () => {
+    // @ts-expect-error - the function is expected to throw a type error for "user//test"
     expect(() => createStreamSubject('user//test')).toThrow('Invalid subject format')
   })
 

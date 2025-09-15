@@ -1,9 +1,9 @@
 import type { CloudEventV1 } from 'cloudevents'
 import type { Brand, DefaultRecord } from './index'
 
-export type Subject = Brand<string, 'StreamSubject'>
+export type Subject = Brand<`${string}/${string}`, 'Subject'>
 
-export type StreamSubject = Brand<`${string}/${string}`, 'StreamSubject'>
+export type StreamSubject = Subject
 
 export type AnyDomainEvent = DomainEvent<any, any, any>
 
