@@ -1,7 +1,7 @@
 {
   "name": "vorfall",
   "type": "module",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "Event store package for Vorfall monorepo.",
   "author": "",
   "license": "MIT",
