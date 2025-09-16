@@ -1,5 +1,5 @@
-import type { Subject } from '../types/domainEvent.types'
 import type { Brand } from '../types'
+import type { Subject } from '../types/domainEvent.types'
 
 const SUBJECT_REGEX = /^[a-z0-9-]+(?:\/[a-z0-9-]+)+$/i
 const STREAM_SUBJECT_REGEX = /^[a-z0-9-]+\/[a-z0-9-]+$/i
