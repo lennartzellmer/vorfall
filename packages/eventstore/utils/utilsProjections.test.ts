@@ -195,7 +195,7 @@ describe('findMultipleProjections', () => {
       limit: 50,
     }
 
-    const projections = await findMultipleProjections(eventStore, testSubjects[0]!, streamFilter, options)
+    const projections = await findMultipleProjections(eventStore, 'recepie', streamFilter, options)
 
     expect(projections).not.toBeNull()
     expect(projections.length).toBe(30)
@@ -211,7 +211,7 @@ describe('findMultipleProjections', () => {
       limit: 20,
     }
 
-    const projections = await findMultipleProjections(eventStore, testSubjects[0]!, streamFilter, options)
+    const projections = await findMultipleProjections(eventStore, 'recepie', streamFilter, options)
 
     expect(projections).not.toBeNull()
     expect(projections.length).toBe(20)
@@ -227,7 +227,7 @@ describe('findMultipleProjections', () => {
       limit: 20,
     }
 
-    const projections = await findMultipleProjections(eventStore, testSubjects[0]!, streamFilter, options)
+    const projections = await findMultipleProjections(eventStore, 'recepie', streamFilter, options)
 
     expect(projections).not.toBeNull()
     expect(projections.length).toBe(20)
@@ -246,7 +246,7 @@ describe('findMultipleProjections', () => {
       limit: 40,
     } as const
 
-    const projections = await findMultipleProjections(eventStore, testSubjects[0]!, streamFilter, options)
+    const projections = await findMultipleProjections(eventStore, 'recepie', streamFilter, options)
 
     expect(projections).not.toBeNull()
     expect(projections.length).toBe(30)
@@ -259,7 +259,7 @@ describe('findMultipleProjections', () => {
       projectionName: 'testProjection',
     } as const
 
-    const count = await countProjections(eventStore, testSubjects[0]!, streamFilter)
+    const count = await countProjections(eventStore, 'recepie', streamFilter)
 
     expect(count).toBe(30)
   })

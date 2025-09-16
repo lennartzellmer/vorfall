@@ -1,6 +1,6 @@
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
 import type { EventStream, ProjectionQuery } from '../eventStore/eventStoreFactory.types'
-import type { AnyDomainEvent, DefaultRecord, Subject } from '../types/index'
+import type { AnyDomainEvent, Brand, DefaultRecord, Subject } from '../types/index'
 import type { CanHandle, ProjectionDefinition, ProjectionQueryOptions } from './utilsProjections.types'
 import { transformFilterForNestedPath } from './utilsMongoFilter'
 
@@ -78,18 +78,34 @@ export async function findOneProjection<
 /**
  * Finds multiple projections in the event store based on the provided filter and optional projection query.
  * @param eventStore - The event store instance to query
- * @param subject - The filter to find matching streams
+ * @param entity - The entity collection backing the projection data
  * @param query - The projectionName and query to filter the projections
  * @param queryOptions - Skip, limit and sort options for the query
  * @returns A promise that resolves to the found projections or an empty array if not found
  */
+type SubjectValue<TSubject extends Subject> = TSubject extends Brand<infer TValue, 'Subject'> ? TValue : never
+
+type EntityFromSubject<TSubject extends Subject> = SubjectValue<TSubject> extends `${infer Entity}/${string}`
+  ? Entity
+  : never
+
+type ProjectionEntity<
+  TProjections extends readonly ProjectionDefinition<any, any, any>[],
+  TProjectionName extends TProjections[number]['name'],
+> = Extract<TProjections[number], { name: TProjectionName }> extends ProjectionDefinition<any, any, infer TEventType>
+  ? TEventType extends { subject: infer TSubject }
+    ? TSubject extends Subject
+      ? EntityFromSubject<TSubject>
+      : never
+    : never
+  : never
+
 export async function findMultipleProjections<
   TProjections extends readonly ProjectionDefinition<any, any, any>[],
   TProjectionName extends TProjections[number]['name'],
 >(
-
   eventStore: EventStoreInstance<TProjections>,
-  subject: Subject,
+  entity: ProjectionEntity<TProjections, TProjectionName>,
   query: ProjectionQuery<TProjectionName>,
   queryOptions: ProjectionQueryOptions,
 ): Promise<Array<TProjections extends readonly ProjectionDefinition<any, any, any>[]
@@ -97,7 +113,12 @@ export async function findMultipleProjections<
   : unknown>> {
   const { projectionName, projectionQuery } = query
 
-  const collection = eventStore.getCollectionBySubject(subject)
+  // If entity includes a / that means it cannot be a collection name of an entity. The function should throw an error then.
+  if (entity.includes('/')) {
+    throw new Error(`Invalid entity name: ${entity}. Entity names cannot include slashes.`)
+  }
+
+  const collection = eventStore.getCollectionByEntity(entity)
 
   const filters = [
     { [`projections.${projectionName}`]: { $exists: true } },
@@ -143,17 +164,20 @@ export async function findMultipleProjections<
 /**
  * Counts the number of projections in the event store based on the provided filter.
  * @param eventStore - The event store instance to query
- * @param subject - The filter to find matching streams
+ * @param entity - The entity collection backing the projection data
  * @param query - The projectionName and query to filter the projections
  * @returns A promise that resolves to the count of projections
  */
-export async function countProjections<TProjections extends readonly ProjectionDefinition<any, any, any>[]>(
+export async function countProjections<
+  TProjections extends readonly ProjectionDefinition<any, any, any>[],
+  TProjectionName extends TProjections[number]['name'],
+>(
   eventStore: EventStoreInstance<TProjections>,
-  subject: Subject,
-  query: ProjectionQuery<TProjections[number]['name']>,
+  entity: ProjectionEntity<TProjections, TProjectionName>,
+  query: ProjectionQuery<TProjectionName>,
 ): Promise<number> {
   const { projectionName, projectionQuery } = query
-  const collection = eventStore.getCollectionBySubject(subject)
+  const collection = eventStore.getCollectionByEntity(entity)
 
   const filters = [
     { [`projections.${projectionName}`]: { $exists: true } },

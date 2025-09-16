@@ -14,6 +14,9 @@ export interface EventStoreInstance<
   getCollectionBySubject: <TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
     subject: Subject
   ) => Collection<EventStream<TDomainEvent, TProjections>>
+  getCollectionByEntity: <TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
+    entity: string
+  ) => Collection<EventStream<TDomainEvent, TProjections>>
   getEventStreamBySubject: <TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
     subject: Subject
   ) => Promise<ReadStreamResult<TDomainEvent>>
@@ -121,6 +124,13 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
       subject: Subject,
     ): Collection<EventStream<TDomainEvent, TProjections>> {
       const collectionName = getCollectionNameFromSubject(subject)
+      return mongoClient.getDatabase().collection<EventStream<TDomainEvent, TProjections>>(collectionName)
+    },
+
+    getCollectionByEntity<TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
+      entity: string,
+    ): Collection<EventStream<TDomainEvent, TProjections>> {
+      const collectionName = entity
       return mongoClient.getDatabase().collection<EventStream<TDomainEvent, TProjections>>(collectionName)
     },
 
