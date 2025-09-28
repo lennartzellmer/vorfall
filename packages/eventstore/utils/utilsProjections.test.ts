@@ -125,6 +125,34 @@ describe('findSingleProjection', () => {
     expect(projection?.streamSubject).toBe(streamSubject)
     expect(projection?.projections?.testProjection).toEqual({ saltAdded: 1 })
   })
+
+  it('should find one projection with stream base and projection query', async () => {
+    const testEvent1 = createDomainEvent({
+      type: 'recepie.salt.added',
+      subject: testSubject,
+      data: { amount: 1 },
+    })
+
+    await eventStore.appendOrCreateStream([testEvent1])
+
+    const projectionQuery = {
+      projectionName: 'testProjection',
+      projectionQuery: {
+        saltAdded: {
+          $gt: 0,
+        },
+      },
+      matchAll: true,
+    } as const
+
+    const testSubject2 = createSubject('recepie/996')
+
+    const projection = await findOneProjection(eventStore, testSubject2, projectionQuery)
+
+    expect(projection).not.toBeNull()
+    expect(projection?.streamSubject).toBe(streamSubject)
+    expect(projection?.projections?.testProjection).toEqual({ saltAdded: 1 })
+  })
 })
 
 describe('findMultipleProjections', () => {

@@ -60,6 +60,9 @@ export async function findOneProjection<
   if (projectionQuery) {
     const queryTransfomed = transformFilterForNestedPath(projectionQuery, `projections.${projectionName}`)
     filters.push(queryTransfomed)
+    if (query.matchAll) {
+      filters.splice(0, 1)
+    }
   }
 
   const result = await collection.findOne(

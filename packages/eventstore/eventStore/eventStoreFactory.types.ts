@@ -33,6 +33,7 @@ export interface ReadStreamResult<
 export interface ProjectionQuery<TProjectionName extends string> {
   projectionName: TProjectionName
   projectionQuery?: Filter<Document>
+  matchAll?: boolean
 }
 
 export interface FindMultipleProjectionQuery<T extends Subject = Subject> {
