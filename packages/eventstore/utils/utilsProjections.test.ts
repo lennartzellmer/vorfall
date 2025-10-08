@@ -1,5 +1,5 @@
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
-import type { DomainEvent } from '../types'
+import type { DomainEvent, Subject } from '../types'
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createEventStore } from '../eventStore/eventStoreFactory'
@@ -145,7 +145,7 @@ describe('findSingleProjection', () => {
       matchAll: true,
     } as const
 
-    const testSubject2 = createSubject('recepie/996')
+    const testSubject2 = 'recepie' as Subject
 
     const projection = await findOneProjection(eventStore, testSubject2, projectionQuery)
 

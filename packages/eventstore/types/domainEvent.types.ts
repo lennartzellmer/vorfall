@@ -17,7 +17,3 @@ export type DomainEvent<
     subject: EventSubject
     data: EventData extends undefined ? undefined : EventData
   } & (EventMetaData extends undefined ? Record<string, never> : { metadata: EventMetaData })
-
-export interface eventStoreOptions {
-  connectionString: string
-}
