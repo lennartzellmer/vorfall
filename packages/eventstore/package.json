@@ -42,14 +42,13 @@
   },
   "dependencies": {
     "cloudevents": "^10.0.0",
-    "mongodb": "^6.18.0"
+    "mongodb": "^7.0.0"
   },
   "devDependencies": {
     "mongodb-memory-server": "catalog:",
     "typescript": "catalog:",
     "vite-plugin-dts": "catalog:",
-    "vitest": "catalog:",
-    "vitest-mock-extended": "catalog:"
+    "vitest": "catalog:"
   },
   "publishConfig": {
     "access": "public"
