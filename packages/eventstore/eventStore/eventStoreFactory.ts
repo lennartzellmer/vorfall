@@ -12,13 +12,13 @@ export interface EventStoreInstance<
 > {
   getInstanceMongoClientWrapper: () => MongoClientWrapper
   getCollectionBySubject: <TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
-    subject: Subject
+    subject: Subject,
   ) => Collection<EventStream<TDomainEvent, TProjections>>
   getCollectionByEntity: <TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
-    entity: string
+    entity: string,
   ) => Collection<EventStream<TDomainEvent, TProjections>>
   getEventStreamBySubject: <TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
-    subject: Subject
+    subject: Subject,
   ) => Promise<ReadStreamResult<TDomainEvent>>
   aggregateStream: <
     State,
@@ -28,10 +28,10 @@ export interface EventStoreInstance<
     options: {
       evolve: (state: State, event: TDomainEvent) => State
       initialState: () => State
-    }
+    },
   ) => Promise<State>
   appendOrCreateStream: <TDomainEvent extends AnyDomainEvent>(
-    events: Array<TDomainEvent>
+    events: Array<TDomainEvent>,
   ) => Promise<MultiStreamAppendResult<TDomainEvent, TProjections>>
 }
 

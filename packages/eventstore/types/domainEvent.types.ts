@@ -10,8 +10,7 @@ export type DomainEvent<
   EventData extends DefaultRecord | undefined = DefaultRecord,
   EventMetaData extends DefaultRecord | undefined = undefined,
   EventSubject extends Subject = Subject,
->
-= CloudEventV1<EventData extends undefined ? undefined : EventData>
+> = CloudEventV1<EventData extends undefined ? undefined : EventData>
   & {
     type: EventType
     subject: EventSubject

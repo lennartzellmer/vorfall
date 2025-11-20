@@ -7,7 +7,7 @@ export function createCommand<
 >(
   params: {
     type: CommandType
-  }
+  },
 ): Command<CommandType, undefined>
 
 // Overload 2: Type + metadata (no data)
@@ -18,7 +18,7 @@ export function createCommand<
   params: {
     type: CommandType
     metadata: CommandMetadata
-  }
+  },
 ): Command<CommandType, undefined, CommandMetadata>
 
 // Overload 4: Type + data
@@ -29,7 +29,7 @@ export function createCommand<
   params: {
     type: CommandType
     data: CommandData
-  }
+  },
 ): Command<CommandType, CommandData>
 
 // Overload 5: Type + data + metadata
@@ -42,7 +42,7 @@ export function createCommand<
     type: CommandType
     data: CommandData
     metadata: CommandMetadata
-  }
+  },
 ): Command<CommandType, CommandData, CommandMetadata>
 
 // Implementation
