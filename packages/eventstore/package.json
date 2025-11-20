@@ -41,8 +41,8 @@
     "lint": "eslint . --ext .ts,.tsx"
   },
   "dependencies": {
-    "cloudevents": "^10.0.0",
-    "mongodb": "^7.0.0"
+    "cloudevents": "catalog:",
+    "mongodb": "catalog:"
   },
   "devDependencies": {
     "mongodb-memory-server": "catalog:",

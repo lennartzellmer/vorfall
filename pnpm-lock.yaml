@@ -18,9 +18,15 @@ catalogs:
     '@vitest/ui':
       specifier: 3.2.4
       version: 3.2.4
+    cloudevents:
+      specifier: 10.0.0
+      version: 10.0.0
     eslint:
       specifier: 9.39.1
       version: 9.39.1
+    mongodb:
+      specifier: 7.0.0
+      version: 7.0.0
     mongodb-memory-server:
       specifier: 10.2.0
       version: 10.2.0
@@ -66,10 +72,10 @@ importers:
   packages/eventstore:
     dependencies:
       cloudevents:
-        specifier: ^10.0.0
+        specifier: 'catalog:'
         version: 10.0.0
       mongodb:
-        specifier: ^7.0.0
+        specifier: 'catalog:'
         version: 7.0.0
     devDependencies:
       mongodb-memory-server:
