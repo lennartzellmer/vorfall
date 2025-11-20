@@ -12,6 +12,9 @@
     "monorepo",
     "mongodb"
   ],
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
