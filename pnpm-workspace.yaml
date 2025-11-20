@@ -11,5 +11,7 @@ catalog:
   mongodb: ^6.18.0
   mongodb-memory-server: ^10.2.0
   typescript: ^5.9.2
+  vite: ^7.1.4
+  vite-plugin-dts: 4.5.4
   vitest: 3.2.4
   vitest-mock-extended: 3.1.0
