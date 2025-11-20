@@ -26,13 +26,13 @@ describe('hasSameStreamSubject', () => {
   it('should return true for multiple events with the same stream subject', () => {
     const events = [
       createDomainEvent({
-        type: 'benutzer.erstellt',
-        subject: createSubject('veranstaltung/123/registrierung/12'),
+        type: 'user.created',
+        subject: createSubject('user/123/orders/12'),
         data: { name: 'John Doe' },
       }),
       createDomainEvent({
-        type: 'benutzer.erstellt',
-        subject: createSubject('veranstaltung/123/registrierung/12'),
+        type: 'user.created',
+        subject: createSubject('user/123/orders/12'),
         data: { name: 'John Doe' },
       }),
     ]
@@ -42,24 +42,24 @@ describe('hasSameStreamSubject', () => {
   it('should return true for one event in the array', () => {
     const events = [
       createDomainEvent({
-        type: 'benutzer.erstellt',
-        subject: createSubject('veranstaltung/123/registrierung/12'),
+        type: 'user.created',
+        subject: createSubject('user/123/orders/12'),
         data: { name: 'John Doe' },
       }),
     ]
     const result = eventsHaveSameStreamSubject(events)
     expect(result).toBe(true)
   })
-  it('should return false for differnt stream subjects', () => {
+  it('should return false for different stream subjects', () => {
     const events = [
       createDomainEvent({
-        type: 'benutzer.erstellt',
-        subject: createSubject('veranstaltung/345/registrierung/12'),
+        type: 'user.created',
+        subject: createSubject('user/345/orders/12'),
         data: { name: 'John Doe' },
       }),
       createDomainEvent({
-        type: 'benutzer.erstellt',
-        subject: createSubject('veranstaltung/123/registrierung/12'),
+        type: 'user.created',
+        subject: createSubject('user/123/orders/12'),
         data: { name: 'John Doe' },
       }),
     ]
@@ -67,16 +67,16 @@ describe('hasSameStreamSubject', () => {
     expect(result).toBe(false)
   })
 
-  it('should return true for differnt subjects if they are not in the first 2 parts', () => {
+  it('should return true for different subjects if they are not in the first 2 parts', () => {
     const events = [
       createDomainEvent({
-        type: 'benutzer.erstellt',
-        subject: createSubject('veranstaltung/123/registrierung/456'),
+        type: 'user.created',
+        subject: createSubject('user/123/orders/456'),
         data: { name: 'John Doe' },
       }),
       createDomainEvent({
-        type: 'benutzer.erstellt',
-        subject: createSubject('veranstaltung/123/registrierung/123'),
+        type: 'user.created',
+        subject: createSubject('user/123/orders/123'),
         data: { name: 'John Doe' },
       }),
     ]
@@ -88,17 +88,17 @@ describe('hasSameStreamSubject', () => {
 describe('groupEventsByStreamSubject', () => {
   const event1 = createDomainEvent({
     type: 'user.created',
-    subject: createSubject('venueTest/123'),
+    subject: createSubject('user/123'),
     data: { name: 'John Doe' },
   })
   const event2 = createDomainEvent({
     type: 'user.deleted',
-    subject: createSubject('venueTest/456'),
+    subject: createSubject('user/456'),
     data: { name: 'Mr. Doe' },
   })
   const event3 = createDomainEvent({
     type: 'user.unsubscribed',
-    subject: createSubject('venueTest/123'),
+    subject: createSubject('user/123'),
     data: { name: 'Jane Doe' },
   })
   const events = [
@@ -110,7 +110,7 @@ describe('groupEventsByStreamSubject', () => {
     const result = groupEventsByStreamSubject(events)
 
     expect(result.size).toBe(2)
-    expect(result.get(createSubject('venueTest/123'))?.length).toBe(2)
-    expect(result.get(createSubject('venueTest/456'))?.length).toBe(1)
+    expect(result.get(createSubject('user/123'))?.length).toBe(2)
+    expect(result.get(createSubject('user/456'))?.length).toBe(1)
   })
 })
