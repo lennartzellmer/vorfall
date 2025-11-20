@@ -22,10 +22,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:publish": "changeset publish",
+    "release": "pnpm changeset:version && pnpm install --frozen-lockfile && pnpm test && pnpm build"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
+    "@changesets/cli": "^2.27.8",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "@vitest/ui": "catalog:",

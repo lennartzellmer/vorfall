@@ -20,6 +20,9 @@ pnpm-debug.log*
 *.sublime-project
 *.tgz
 
+# Changesets
+.changeset/cache
+
 # OS
 Thumbs.db
 Desktop.ini
