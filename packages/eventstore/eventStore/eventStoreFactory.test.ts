@@ -14,12 +14,12 @@ describe('mongoClientWrapper Integration Tests', () => {
   let connectionString: string
 
   // Provide test data
-  const subjectExisting = createSubject('veranstaltung/123/erstellt')
+  const subjectExisting = createSubject('user/123/created')
   const streamSubject = getStreamSubjectFromSubject(subjectExisting)
   const testEvent = createDomainEvent({
-    type: 'veranstaltung.erstellt',
+    type: 'user.created',
     subject: subjectExisting,
-    data: { test: 'data' },
+    data: { name: 'Alice Example', email: 'alice@example.com' },
   })
   const eventStream = createEventStream([testEvent])
 
@@ -49,7 +49,7 @@ describe('mongoClientWrapper Integration Tests', () => {
 
   describe('getEventStreamBySubject', () => {
     it('should return empty result when stream does not exist', async () => {
-      const subjectNonExisting = createSubject('test/non-existentstream')
+      const subjectNonExisting = createSubject('user/non-existentstream')
       const result = await eventStore.getEventStreamBySubject(subjectNonExisting)
 
       expect(result).toEqual({
@@ -92,9 +92,9 @@ describe('mongoClientWrapper Integration Tests', () => {
       await collection.insertOne(eventStream, { ignoreUndefined: true })
 
       const newEvent = createDomainEvent({
-        type: 'veranstaltung.aktualisiert',
+        type: 'user.updated',
         subject: subjectExisting,
-        data: { updated: 'data' },
+        data: { name: 'Alice Example', email: 'ally@example.com' },
       })
 
       // wait for 10ms to ensure the updatedAt field is different
@@ -118,7 +118,7 @@ describe('mongoClientWrapper Integration Tests', () => {
     it('should store a projection when configured', async () => {
       const projectionDefinition = createProjectionDefinition({
         name: 'TestProjection',
-        canHandle: ['veranstaltung.erstellt'],
+        canHandle: ['user.created'],
         evolve: (state: { count: number }) => {
           return { count: state.count + 1 }
         },
@@ -135,7 +135,7 @@ describe('mongoClientWrapper Integration Tests', () => {
     it('should update an already existing projection', async () => {
       const projectionDefinition = createProjectionDefinition({
         name: 'TestProjection',
-        canHandle: ['veranstaltung.erstellt'],
+        canHandle: ['user.created'],
         evolve: (state: { count: number }) => {
           return { count: state.count + 1 }
         },
@@ -158,25 +158,25 @@ describe('mongoClientWrapper Integration Tests', () => {
       // TODO: Test negative case where one of the streams does not exist and transaction should fail
 
       // Create events for different streams
-      const stream1Subject = createSubject('veranstaltung/123/erstellt')
-      const stream2Subject = createSubject('teilnehmer/456/angemeldet')
+      const stream1Subject = createSubject('user/123/created')
+      const stream2Subject = createSubject('user/456/created')
 
       const event1 = createDomainEvent({
-        type: 'veranstaltung.erstellt',
+        type: 'user.created',
         subject: stream1Subject,
-        data: { name: 'Event 1' },
+        data: { name: 'Alice Example', email: 'alice@example.com' },
       })
 
       const event2 = createDomainEvent({
-        type: 'teilnehmer.angemeldet',
+        type: 'user.created',
         subject: stream2Subject,
-        data: { name: 'Participant 1' },
+        data: { name: 'Bob Example', email: 'bob@example.com' },
       })
 
       const event3 = createDomainEvent({
-        type: 'veranstaltung.aktualisiert',
+        type: 'user.updated',
         subject: stream1Subject,
-        data: { name: 'Event 1 Updated' },
+        data: { name: 'Alice Updated', email: 'alice.updated@example.com' },
       })
 
       // Append events from different streams
@@ -196,18 +196,18 @@ describe('mongoClientWrapper Integration Tests', () => {
 
       // Stream 1 should have 2 events (event1 and event3)
       expect(stream1!.events.length).toBe(2)
-      expect(stream1!.events[0]!.type).toBe('veranstaltung.erstellt')
-      expect(stream1!.events[1]!.type).toBe('veranstaltung.aktualisiert')
+      expect(stream1!.events[0]!.type).toBe('user.created')
+      expect(stream1!.events[1]!.type).toBe('user.updated')
 
       // Stream 2 should have 1 event (event2)
       expect(stream2!.events.length).toBe(1)
-      expect(stream2!.events[0]!.type).toBe('teilnehmer.angemeldet')
+      expect(stream2!.events[0]!.type).toBe('user.created')
     })
 
     it('should handle multiple streams with projections correctly', async () => {
       const projectionDefinition = createProjectionDefinition({
         name: 'EventCountProjection',
-        canHandle: ['veranstaltung.erstellt', 'teilnehmer.angemeldet'],
+        canHandle: ['user.created'],
         evolve: (state: { count: number }) => {
           return { count: state.count + 1 }
         },
@@ -218,19 +218,19 @@ describe('mongoClientWrapper Integration Tests', () => {
       await testEventStore.getInstanceMongoClientWrapper().waitForConnection()
 
       // Create events for different streams
-      const stream1Subject = createSubject('veranstaltung/789/erstellt')
-      const stream2Subject = createSubject('teilnehmer/101/angemeldet')
+      const stream1Subject = createSubject('user/789/created')
+      const stream2Subject = createSubject('user/101/created')
 
       const event1 = createDomainEvent({
-        type: 'veranstaltung.erstellt',
+        type: 'user.created',
         subject: stream1Subject,
-        data: { name: 'Event 789' },
+        data: { name: 'Charlie Example', email: 'charlie@example.com' },
       })
 
       const event2 = createDomainEvent({
-        type: 'teilnehmer.angemeldet',
+        type: 'user.created',
         subject: stream2Subject,
-        data: { name: 'Participant 101' },
+        data: { name: 'Dana Example', email: 'dana@example.com' },
       })
 
       const result = await testEventStore.appendOrCreateStream([event1, event2])
@@ -248,13 +248,13 @@ describe('mongoClientWrapper Integration Tests', () => {
 
   describe('aggregateStream', () => {
     const firstTestEvent = createDomainEvent({
-      type: 'event.created',
+      type: 'user.created',
       subject: subjectExisting,
       data: { increase: 1 },
     })
 
     type FirstTestEvent = DomainEvent<
-      'event.created',
+      'user.created',
       { increase: number }
     >
 
@@ -271,7 +271,7 @@ describe('mongoClientWrapper Integration Tests', () => {
     })
 
     it('should return initial state when stream does not exist', async () => {
-      const subjectNonExisting = createSubject('test/non-existent-aggregate')
+      const subjectNonExisting = createSubject('user/non-existent-aggregate')
 
       const result = await eventStore.aggregateStream(subjectNonExisting, {
         evolve,
@@ -299,7 +299,7 @@ describe('mongoClientWrapper Integration Tests', () => {
 
     it('should aggregate multiple events from existing stream', async () => {
       const secondTestEvent = createDomainEvent({
-        type: 'event.created',
+        type: 'user.created',
         subject: subjectExisting,
         data: { increase: 99 },
       })
