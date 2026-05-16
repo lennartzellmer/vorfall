@@ -1,10 +1,11 @@
 import type { MockedObject } from 'vitest'
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
 import type { Command, DomainEvent } from '../types/index'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { createDomainEvent, createEventStream } from '../utils/utilsEventStore'
 import { createStreamSubject } from '../utils/utilsSubject'
 import { handleCommand } from './handleCommand'
+import { createStreamHandler } from './streamHandler'
 import { createCommand } from './utilsCommand'
 
 describe('handleCommand', () => {
@@ -55,15 +56,13 @@ describe('handleCommand', () => {
       }),
     )
 
+    const testHandler = createStreamHandler('test', { evolve, initialState })
+
     const result = await handleCommand({
-      streams: [{
-        evolve,
-        initialState,
-        streamSubject,
-      }],
       eventStore: mockEventStore,
-      commandHandlerFunction,
+      streams: [{ handler: testHandler, id: '123' }],
       command: incrementCounterCommand,
+      commandHandlerFunction,
     })
 
     expect(mockEventStore.aggregateStream).toHaveBeenCalledWith(streamSubject, {
@@ -113,12 +112,10 @@ describe('handleCommand', () => {
       data: { incrementBy: 10 },
     })
 
-    // Async command handler function
     const commandHandlerFunction = vi.fn(
       async ({ command }: {
         command: IncrementCounterCommand
       }): Promise<CounterIncrementedEvent> => {
-        // Simulate some async operation
         await new Promise(resolve => setTimeout(resolve, 10))
         return createDomainEvent({
           ...counterIncrementedEvent,
@@ -127,15 +124,13 @@ describe('handleCommand', () => {
       },
     )
 
+    const testHandler = createStreamHandler('test', { evolve, initialState })
+
     const result = await handleCommand({
-      streams: [{
-        evolve,
-        initialState,
-        streamSubject,
-      }],
       eventStore: mockEventStore,
-      commandHandlerFunction,
+      streams: [{ handler: testHandler, id: '456' }],
       command: incrementCounterCommand,
+      commandHandlerFunction,
     })
 
     expect(mockEventStore.aggregateStream).toHaveBeenCalledWith(streamSubject, {
@@ -195,12 +190,10 @@ describe('handleCommand', () => {
       data: { incrementBy: 5 },
     })
 
-    // Async command handler function returning array of events
     const commandHandlerFunction = vi.fn(
       async ({ command }: {
         command: IncrementTwiceCommand
       }): Promise<CounterIncrementedEvent[]> => {
-        // Simulate some async operation
         await new Promise(resolve => setTimeout(resolve, 10))
         return [
           createDomainEvent({
@@ -215,15 +208,13 @@ describe('handleCommand', () => {
       },
     )
 
+    const testHandler = createStreamHandler('test', { evolve, initialState })
+
     const result = await handleCommand({
-      streams: [{
-        evolve,
-        initialState,
-        streamSubject,
-      }],
       eventStore: mockEventStore,
-      commandHandlerFunction,
+      streams: [{ handler: testHandler, id: '789' }],
       command: incrementTwiceCommand,
+      commandHandlerFunction,
     })
 
     expect(mockEventStore.aggregateStream).toHaveBeenCalledWith(streamSubject, {
@@ -241,15 +232,12 @@ describe('handleCommand', () => {
       appendOrCreateStream: vi.fn(),
     } as MockedObject<EventStoreInstance>
 
-    // Create stream subjects for user and email list
     const userStreamSubject = createStreamSubject('user/123')
     const emailListStreamSubject = createStreamSubject('emailList/123')
 
-    // Define event types
     type UserSubscribedEvent = DomainEvent<'user.subscribed', { emailListId: string }>
     type EmailListSubscriptionAddedEvent = DomainEvent<'emailList.subscriptionAdded', { userId: string }>
 
-    // Create expected events
     const userSubscribedEvent: UserSubscribedEvent = createDomainEvent({
       type: 'user.subscribed',
       subject: userStreamSubject,
@@ -262,7 +250,6 @@ describe('handleCommand', () => {
       data: { userId: '123' },
     })
 
-    // Define state interfaces
     interface UserState {
       subscriptions: string[]
     }
@@ -272,24 +259,21 @@ describe('handleCommand', () => {
       maxSubscribers: number
     }
 
-    // User stream configuration
     const userEvolve = (state: UserState, event: UserSubscribedEvent): UserState => ({
       subscriptions: [...state.subscriptions, event.data.emailListId],
     })
     const userInitialState = (): UserState => ({ subscriptions: [] })
 
-    // Email list stream configuration
     const emailListEvolve = (state: EmailListState, event: EmailListSubscriptionAddedEvent): EmailListState => ({
       ...state,
       subscribers: [...state.subscribers, event.data.userId],
     })
 
     const emailListInitialState = (): EmailListState => ({
-      subscribers: ['user1', 'user2', 'user3', 'user4', 'user5'], // Already has 5 subscribers
+      subscribers: ['user1', 'user2', 'user3', 'user4', 'user5'],
       maxSubscribers: 10,
     })
 
-    // Mock aggregated states
     const mockedUserState: UserState = { subscriptions: [] }
     const mockedEmailListState: EmailListState = {
       subscribers: ['user1', 'user2', 'user3', 'user4', 'user5'],
@@ -305,21 +289,17 @@ describe('handleCommand', () => {
       streamSubjects: [userStreamSubject, emailListStreamSubject],
     }
 
-    // Configure mocks to return different states for different streams
     mockEventStore.aggregateStream
       .mockImplementation(async (streamSubject: string) => {
-        if (streamSubject === userStreamSubject) {
+        if (streamSubject === userStreamSubject)
           return mockedUserState
-        }
-        if (streamSubject === emailListStreamSubject) {
+        if (streamSubject === emailListStreamSubject)
           return mockedEmailListState
-        }
         throw new Error(`Unexpected stream subject: ${streamSubject}`)
       })
 
     mockEventStore.appendOrCreateStream.mockResolvedValue(mockedNewState)
 
-    // Define command type
     type SubscribeToEmailListCommand = Command<'SubscribeToEmailList', {
       userId: string
       emailListId: string
@@ -329,7 +309,6 @@ describe('handleCommand', () => {
       data: { userId: '123', emailListId: '123' },
     })
 
-    // Command handler function that handles multiple streams
     const commandHandlerFunction = vi.fn(
       ({ command, states }: {
         command: SubscribeToEmailListCommand
@@ -338,7 +317,6 @@ describe('handleCommand', () => {
         const userState = states?.get(userStreamSubject)
         const emailListState = states?.get(emailListStreamSubject) as EmailListState
 
-        // Business logic: Check if user can subscribe
         if (emailListState.subscribers.length >= emailListState.maxSubscribers) {
           throw new Error('Email list is full')
         }
@@ -347,7 +325,6 @@ describe('handleCommand', () => {
           throw new Error('User already subscribed to this email list')
         }
 
-        // Return events for both streams
         return [
           createDomainEvent({
             type: 'user.subscribed',
@@ -363,25 +340,19 @@ describe('handleCommand', () => {
       },
     )
 
+    const userHandler = createStreamHandler('user', { evolve: userEvolve, initialState: userInitialState })
+    const emailListHandler = createStreamHandler('emailList', { evolve: emailListEvolve, initialState: emailListInitialState })
+
     const result = await handleCommand({
-      streams: [
-        {
-          evolve: userEvolve,
-          initialState: userInitialState,
-          streamSubject: userStreamSubject,
-        },
-        {
-          evolve: emailListEvolve,
-          initialState: emailListInitialState,
-          streamSubject: emailListStreamSubject,
-        },
-      ],
       eventStore: mockEventStore,
-      commandHandlerFunction,
+      streams: [
+        { handler: userHandler, id: '123' },
+        { handler: emailListHandler, id: '123' },
+      ],
       command: subscribeCommand,
+      commandHandlerFunction,
     })
 
-    // Verify correct aggregation calls
     expect(mockEventStore.aggregateStream).toHaveBeenCalledWith(userStreamSubject, {
       evolve: userEvolve,
       initialState: userInitialState,
@@ -391,7 +362,6 @@ describe('handleCommand', () => {
       initialState: emailListInitialState,
     })
 
-    // Verify command handler was called with correct states
     const expectedStatesMap = new Map<string, any>([
       [userStreamSubject, mockedUserState],
       [emailListStreamSubject, mockedEmailListState],
@@ -401,22 +371,47 @@ describe('handleCommand', () => {
       states: expectedStatesMap,
     })
 
-    // Verify events were appended - check structure instead of exact events due to random IDs
     expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({
-          type: 'user.subscribed',
-          subject: userStreamSubject,
-          data: { emailListId: '123' },
-        }),
-        expect.objectContaining({
-          type: 'emailList.subscriptionAdded',
-          subject: emailListStreamSubject,
-          data: { userId: '123' },
-        }),
+        expect.objectContaining({ type: 'user.subscribed', subject: userStreamSubject, data: { emailListId: '123' } }),
+        expect.objectContaining({ type: 'emailList.subscriptionAdded', subject: emailListStreamSubject, data: { userId: '123' } }),
       ]),
     )
 
     expect(result).toBe(mockedNewState)
+  })
+
+  it('should carry the inferred domain event type through to the return value', async () => {
+    const mockEventStore = {
+      aggregateStream: vi.fn().mockResolvedValue({ counter: 0 }),
+      appendOrCreateStream: vi.fn().mockResolvedValue({
+        streams: [],
+        totalEventsAppended: 0,
+        streamSubjects: [],
+      }),
+    } as MockedObject<EventStoreInstance>
+
+    type CounterIncrementedEvent = DomainEvent<'counter.incremented', { incrementedBy: number }>
+
+    const streamSubject = createStreamSubject('test/type-check')
+    const testHandler = createStreamHandler('test', {
+      evolve: (state: { counter: number }) => state,
+      initialState: () => ({ counter: 0 }),
+    })
+
+    const commandHandlerFunction = (_params: unknown): CounterIncrementedEvent =>
+      createDomainEvent({ type: 'counter.incremented', subject: streamSubject, data: { incrementedBy: 1 } })
+
+    const result = await handleCommand({
+      eventStore: mockEventStore,
+      streams: [{ handler: testHandler, id: 'type-check' }],
+      command: createCommand({ type: 'Increment' }),
+      commandHandlerFunction,
+    })
+
+    expectTypeOf(result).not.toBeAny()
+    expectTypeOf(result).toExtend<{
+      streams: ReadonlyArray<{ events: CounterIncrementedEvent[] }>
+    }>()
   })
 })
