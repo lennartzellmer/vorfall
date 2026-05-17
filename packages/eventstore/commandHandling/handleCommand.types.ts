@@ -1,6 +1,6 @@
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
-import type { AnyDomainEvent, Command, Subject } from '../types/index'
-import type { StreamRef } from './streamDefinition.types'
+import type { AnyDomainEvent, Command } from '../types/index'
+import type { States, StreamRef } from './streamDefinition.types'
 
 export type ExtractDomainEventFromReturnType<T>
   = T extends AnyDomainEvent ? T
@@ -15,14 +15,6 @@ export type InferDomainEventFromCommandHandler<TCommandHandler>
 
 export type DefaultRecord = Record<string, unknown>
 
-export interface StreamConfig<State, TDomainEvent> {
-  initialState: () => State
-  streamSubject: Subject
-  evolve: (state: State, event: TDomainEvent) => State
-}
-
-export type StreamEntry = StreamConfig<any, any> | StreamRef
-
 export type CommandHandlerFunction<
   CommandType extends string = string,
   CommandData extends DefaultRecord | undefined = undefined,
@@ -30,7 +22,7 @@ export type CommandHandlerFunction<
   TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
 > = (params: {
   command: Command<CommandType, CommandData, CommandMetadata>
-  states?: Map<Subject, any>
+  states?: States
 }) =>
   | TDomainEvent
   | TDomainEvent[]
@@ -41,10 +33,10 @@ export interface CommandHandlerOptions<
   CommandType extends string = string,
   CommandData extends DefaultRecord | undefined = undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  TCommandHandlerFunction extends (params: { command: Command<CommandType, CommandData, CommandMetadata>, states?: Map<Subject, any> }) => any = (params: { command: Command<CommandType, CommandData, CommandMetadata>, states?: Map<Subject, any> }) => any,
+  TCommandHandlerFunction extends (params: { command: Command<CommandType, CommandData, CommandMetadata>, states?: States }) => any = (params: { command: Command<CommandType, CommandData, CommandMetadata>, states?: States }) => any,
 > {
   eventStore: EventStoreInstance<any>
-  streams: ReadonlyArray<StreamEntry>
+  streams: ReadonlyArray<StreamRef>
   command: Command<CommandType, CommandData, CommandMetadata>
   commandHandlerFunction: TCommandHandlerFunction
 }

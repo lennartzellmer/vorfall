@@ -47,6 +47,9 @@ describe('handleCommand', () => {
       data: { incrementBy: 42 },
     })
 
+    const testStream = createStreamDefinition('test', { evolve, initialState })
+    const testStreamRef = { definition: testStream, id: '123' }
+
     const commandHandlerFunction = vi.fn(
       ({ command }: {
         command: IncrementCounterCommand
@@ -56,11 +59,9 @@ describe('handleCommand', () => {
       }),
     )
 
-    const testStream = createStreamDefinition('test', { evolve, initialState })
-
     const result = await handleCommand({
       eventStore: mockEventStore,
-      streams: [{ definition: testStream, id: '123' }],
+      streams: [testStreamRef],
       command: incrementCounterCommand,
       commandHandlerFunction,
     })
@@ -69,7 +70,7 @@ describe('handleCommand', () => {
       evolve,
       initialState,
     })
-    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementCounterCommand, states: new Map([[streamSubject, mockedAggregatedState]]) })
+    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementCounterCommand, states: expect.objectContaining({ get: expect.any(Function) }) })
     expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith([counterIncrementedEvent])
     expect(result).toBe(mockedNewState)
   })
@@ -112,6 +113,9 @@ describe('handleCommand', () => {
       data: { incrementBy: 10 },
     })
 
+    const testStream = createStreamDefinition('test', { evolve, initialState })
+    const testStreamRef = { definition: testStream, id: '456' }
+
     const commandHandlerFunction = vi.fn(
       async ({ command }: {
         command: IncrementCounterCommand
@@ -124,11 +128,9 @@ describe('handleCommand', () => {
       },
     )
 
-    const testStream = createStreamDefinition('test', { evolve, initialState })
-
     const result = await handleCommand({
       eventStore: mockEventStore,
-      streams: [{ definition: testStream, id: '456' }],
+      streams: [testStreamRef],
       command: incrementCounterCommand,
       commandHandlerFunction,
     })
@@ -137,7 +139,7 @@ describe('handleCommand', () => {
       evolve,
       initialState,
     })
-    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementCounterCommand, states: new Map([[streamSubject, mockedAggregatedState]]) })
+    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementCounterCommand, states: expect.objectContaining({ get: expect.any(Function) }) })
     expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith([counterIncrementedEvent])
     expect(result).toBe(mockedNewState)
   })
@@ -190,6 +192,9 @@ describe('handleCommand', () => {
       data: { incrementBy: 5 },
     })
 
+    const testStream = createStreamDefinition('test', { evolve, initialState })
+    const testStreamRef = { definition: testStream, id: '789' }
+
     const commandHandlerFunction = vi.fn(
       async ({ command }: {
         command: IncrementTwiceCommand
@@ -208,11 +213,9 @@ describe('handleCommand', () => {
       },
     )
 
-    const testStream = createStreamDefinition('test', { evolve, initialState })
-
     const result = await handleCommand({
       eventStore: mockEventStore,
-      streams: [{ definition: testStream, id: '789' }],
+      streams: [testStreamRef],
       command: incrementTwiceCommand,
       commandHandlerFunction,
     })
@@ -221,7 +224,7 @@ describe('handleCommand', () => {
       evolve,
       initialState,
     })
-    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementTwiceCommand, states: new Map([[streamSubject, mockedAggregatedState]]) })
+    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementTwiceCommand, states: expect.objectContaining({ get: expect.any(Function) }) })
     expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith([counterIncrementedEvent1, counterIncrementedEvent2])
     expect(result).toBe(mockedNewState)
   })
@@ -309,13 +312,15 @@ describe('handleCommand', () => {
       data: { userId: '123', emailListId: '123' },
     })
 
+    const userStream = createStreamDefinition('user', { evolve: userEvolve, initialState: userInitialState })
+    const emailListStream = createStreamDefinition('emailList', { evolve: emailListEvolve, initialState: emailListInitialState })
+    const userStreamRef = { definition: userStream, id: '123' }
+    const emailListStreamRef = { definition: emailListStream, id: '123' }
+
     const commandHandlerFunction = vi.fn(
-      ({ command, states }: {
-        command: SubscribeToEmailListCommand
-        states?: Map<string, any>
-      }): [UserSubscribedEvent, EmailListSubscriptionAddedEvent] => {
-        const userState = states?.get(userStreamSubject)
-        const emailListState = states?.get(emailListStreamSubject) as EmailListState
+      ({ command, states }): [UserSubscribedEvent, EmailListSubscriptionAddedEvent] => {
+        const userState = states?.get(userStreamRef)
+        const emailListState = states?.get(emailListStreamRef)
 
         if (emailListState.subscribers.length >= emailListState.maxSubscribers) {
           throw new Error('Email list is full')
@@ -340,15 +345,9 @@ describe('handleCommand', () => {
       },
     )
 
-    const userStream = createStreamDefinition('user', { evolve: userEvolve, initialState: userInitialState })
-    const emailListStream = createStreamDefinition('emailList', { evolve: emailListEvolve, initialState: emailListInitialState })
-
     const result = await handleCommand({
       eventStore: mockEventStore,
-      streams: [
-        { definition: userStream, id: '123' },
-        { definition: emailListStream, id: '123' },
-      ],
+      streams: [userStreamRef, emailListStreamRef],
       command: subscribeCommand,
       commandHandlerFunction,
     })
@@ -360,15 +359,6 @@ describe('handleCommand', () => {
     expect(mockEventStore.aggregateStream).toHaveBeenCalledWith(emailListStreamSubject, {
       evolve: emailListEvolve,
       initialState: emailListInitialState,
-    })
-
-    const expectedStatesMap = new Map<string, any>([
-      [userStreamSubject, mockedUserState],
-      [emailListStreamSubject, mockedEmailListState],
-    ])
-    expect(commandHandlerFunction).toHaveBeenCalledWith({
-      command: subscribeCommand,
-      states: expectedStatesMap,
     })
 
     expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith(
@@ -413,5 +403,49 @@ describe('handleCommand', () => {
     expectTypeOf(result).toExtend<{
       streams: ReadonlyArray<{ events: CounterIncrementedEvent[] }>
     }>()
+  })
+
+  it('should infer state types from stream definitions via states.get()', async () => {
+    const mockEventStore = {
+      aggregateStream: vi.fn(),
+      appendOrCreateStream: vi.fn().mockResolvedValue({
+        streams: [],
+        totalEventsAppended: 0,
+        streamSubjects: [],
+      }),
+    } as MockedObject<EventStoreInstance>
+
+    interface UserState { subscriptions: string[] }
+    interface EmailListState { subscribers: string[], maxSubscribers: number }
+
+    const userStream = createStreamDefinition('user', {
+      evolve: (state: UserState): UserState => state,
+      initialState: (): UserState => ({ subscriptions: [] }),
+    })
+    const emailListStream = createStreamDefinition('emailList', {
+      evolve: (state: EmailListState): EmailListState => state,
+      initialState: (): EmailListState => ({ subscribers: [], maxSubscribers: 10 }),
+    })
+    const userStreamRef = { definition: userStream, id: '1' }
+    const emailListStreamRef = { definition: emailListStream, id: '1' }
+
+    mockEventStore.aggregateStream.mockResolvedValue({ subscriptions: [] })
+
+    await handleCommand({
+      eventStore: mockEventStore,
+      streams: [userStreamRef, emailListStreamRef],
+      command: createCommand({ type: 'Test' }),
+      commandHandlerFunction: ({ states }) => {
+        const userState = states?.get(userStreamRef)
+        const emailListState = states?.get(emailListStreamRef)
+
+        expectTypeOf(userState).not.toBeAny()
+        expectTypeOf(userState).toEqualTypeOf<UserState | undefined>()
+        expectTypeOf(emailListState).not.toBeAny()
+        expectTypeOf(emailListState).toEqualTypeOf<EmailListState | undefined>()
+
+        return createDomainEvent({ type: 'test', subject: createStreamSubject('test/1'), data: {} })
+      },
+    })
   })
 })

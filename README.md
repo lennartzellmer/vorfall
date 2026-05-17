@@ -162,9 +162,9 @@ const command: RegisterUserCommand = createCommand({
 
 ---
 
-### Handling Commands — with `StreamRef` (recommended)
+### Handling Commands
 
-Define a stream once per aggregate module, then reference it by ID at each call site. This avoids repeating `evolve` and `initialState` everywhere:
+Define a stream once per aggregate module with `createStreamDefinition`, then reference it by ID at each call site. Pass the same ref to both `streams` and `states.get()` — TypeScript infers the state type automatically:
 
 ```typescript
 import { createStreamDefinition, handleCommand } from 'vorfall'
@@ -173,13 +173,14 @@ import { createStreamDefinition, handleCommand } from 'vorfall'
 export const userStream = createStreamDefinition('user', { evolve, initialState })
 
 // Single-stream command:
+const userRef = { definition: userStream, id: 'abc-123' }
+
 await handleCommand({
   eventStore,
-  streams: [{ definition: userStream, id: 'abc-123' }],
+  streams: [userRef],
   command: registerCommand,
   commandHandlerFunction: ({ command, states }) => {
-    const streamSubject = createStreamSubject(`user/${command.data.userId}`)
-    const state = states?.get(streamSubject)
+    const state = states?.get(userRef) // typed as UserState
 
     if (state?.isActive) {
       throw new Error('User already registered')
@@ -187,7 +188,7 @@ await handleCommand({
 
     return createDomainEvent({
       type: 'user.registered',
-      subject: streamSubject,
+      subject: createStreamSubject(`user/${command.data.userId}`),
       data: { email: command.data.email, name: command.data.name },
     })
   },
@@ -203,51 +204,25 @@ When a command must atomically touch multiple aggregates, add multiple refs to `
 export const userStream = createStreamDefinition('user', { evolve: userEvolve, initialState: userInitialState })
 export const emailListStream = createStreamDefinition('emailList', { evolve: emailListEvolve, initialState: emailListInitialState })
 
+const userRef = { definition: userStream, id: userId }
+const emailListRef = { definition: emailListStream, id: emailListId }
+
 await handleCommand({
   eventStore,
-  streams: [
-    { definition: userStream, id: userId },
-    { definition: emailListStream, id: emailListId },
-  ],
+  streams: [userRef, emailListRef],
   command: subscribeCommand,
   commandHandlerFunction: ({ command, states }) => {
-    const userSubject = createStreamSubject(`user/${command.data.userId}`)
-    const emailListSubject = createStreamSubject(`emailList/${command.data.emailListId}`)
-
-    const userState = states?.get(userSubject)
-    const emailListState = states?.get(emailListSubject)
+    const userState = states?.get(userRef) // typed as UserState
+    const emailListState = states?.get(emailListRef) // typed as EmailListState
 
     if (emailListState.subscribers.length >= emailListState.maxSubscribers) {
       throw new Error('Email list is full')
     }
 
     return [
-      createDomainEvent({ type: 'user.subscribed', subject: userSubject, data: { emailListId: command.data.emailListId } }),
-      createDomainEvent({ type: 'emailList.subscriptionAdded', subject: emailListSubject, data: { userId: command.data.userId } }),
+      createDomainEvent({ type: 'user.subscribed', subject: createStreamSubject(`user/${command.data.userId}`), data: { emailListId: command.data.emailListId } }),
+      createDomainEvent({ type: 'emailList.subscriptionAdded', subject: createStreamSubject(`emailList/${command.data.emailListId}`), data: { userId: command.data.userId } }),
     ]
-  },
-})
-```
-
-### Handling Commands — explicit `StreamConfig` (still supported)
-
-Pass `streamSubject`, `evolve`, and `initialState` directly if you prefer not to use `createStreamDefinition`:
-
-```typescript
-await handleCommand({
-  eventStore,
-  streams: [{
-    streamSubject: createStreamSubject('user/abc-123'),
-    evolve,
-    initialState,
-  }],
-  command: registerCommand,
-  commandHandlerFunction: ({ command }) => {
-    return createDomainEvent({
-      type: 'user.registered',
-      subject: createStreamSubject('user/abc-123'),
-      data: { email: command.data.email, name: command.data.name },
-    })
   },
 })
 ```

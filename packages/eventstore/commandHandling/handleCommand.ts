@@ -1,34 +1,38 @@
 import type { MultiStreamAppendResult } from '../eventStore/eventStoreFactory.types'
-import type { Subject } from '../types/domainEvent.types'
 import type { Command, DefaultRecord } from '../types/index'
 import type { CommandHandlerOptions, InferDomainEventFromCommandHandler } from './handleCommand.types'
+import type { States, StreamRef } from './streamDefinition.types'
 import { createStreamSubject } from '../utils/utilsSubject'
+
+function createStates(map: Map<string, any>): States {
+  return {
+    get<TState, TEvent>(ref: StreamRef<TState, TEvent>): TState | undefined {
+      return map.get(createStreamSubject(`${ref.definition.streamName}/${ref.id}`))
+    },
+  }
+}
 
 export async function handleCommand<
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  TCommandHandlerFunction extends (params: { command: Command<CommandType, CommandData, CommandMetadata>, states?: Map<Subject, any> }) => any = (params: { command: Command<CommandType, CommandData, CommandMetadata>, states?: Map<Subject, any> }) => any,
+  TCommandHandlerFunction extends (params: { command: Command<CommandType, CommandData, CommandMetadata>, states?: States }) => any = (params: { command: Command<CommandType, CommandData, CommandMetadata>, states?: States }) => any,
 >(
   options: CommandHandlerOptions<CommandType, CommandData, CommandMetadata, TCommandHandlerFunction>,
 ): Promise<MultiStreamAppendResult<InferDomainEventFromCommandHandler<TCommandHandlerFunction>, any>> {
   const { eventStore, streams, command, commandHandlerFunction } = options
 
-  const aggregatedStreamStates: Map<Subject, any> = new Map()
+  const statesMap = new Map<string, any>()
   for (const stream of streams) {
-    const { streamSubject, evolve, initialState } = 'definition' in stream
-      ? {
-          streamSubject: createStreamSubject(`${stream.definition.streamName}/${stream.id}`),
-          evolve: stream.definition.evolve,
-          initialState: stream.definition.initialState,
-        }
-      : stream
-
-    const state = await eventStore.aggregateStream<any, InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(streamSubject, { evolve, initialState })
-    aggregatedStreamStates.set(streamSubject, state)
+    const subject = createStreamSubject(`${stream.definition.streamName}/${stream.id}`)
+    const state = await eventStore.aggregateStream<any, InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(subject, {
+      evolve: stream.definition.evolve,
+      initialState: stream.definition.initialState,
+    })
+    statesMap.set(subject, state)
   }
 
-  const result = await commandHandlerFunction({ command, states: aggregatedStreamStates })
+  const result = await commandHandlerFunction({ command, states: createStates(statesMap) })
   const eventsToAppend = Array.isArray(result) ? result : [result]
 
   return eventStore.appendOrCreateStream<InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(eventsToAppend)
