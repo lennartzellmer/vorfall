@@ -162,20 +162,20 @@ const command: RegisterUserCommand = createCommand({
 
 ---
 
-### Handling Commands — with `StreamHandlerRef` (recommended)
+### Handling Commands — with `StreamRef` (recommended)
 
-Define a stream handler once per aggregate module, then reference it by ID at each call site. This avoids repeating `evolve` and `initialState` everywhere:
+Define a stream once per aggregate module, then reference it by ID at each call site. This avoids repeating `evolve` and `initialState` everywhere:
 
 ```typescript
-import { createStreamHandler, handleCommand } from 'vorfall'
+import { createStreamDefinition, handleCommand } from 'vorfall'
 
-// user/handler.ts — defined once per aggregate module
-export const userHandler = createStreamHandler('user', { evolve, initialState })
+// user/stream.ts — defined once per aggregate module
+export const userStream = createStreamDefinition('user', { evolve, initialState })
 
 // Single-stream command:
 await handleCommand({
   eventStore,
-  streams: [{ handler: userHandler, id: 'abc-123' }],
+  streams: [{ definition: userStream, id: 'abc-123' }],
   command: registerCommand,
   commandHandlerFunction: ({ command, states }) => {
     const streamSubject = createStreamSubject(`user/${command.data.userId}`)
@@ -199,15 +199,15 @@ await handleCommand({
 When a command must atomically touch multiple aggregates, add multiple refs to `streams`:
 
 ```typescript
-// handlers.ts
-export const userHandler = createStreamHandler('user', { evolve: userEvolve, initialState: userInitialState })
-export const emailListHandler = createStreamHandler('emailList', { evolve: emailListEvolve, initialState: emailListInitialState })
+// streams.ts
+export const userStream = createStreamDefinition('user', { evolve: userEvolve, initialState: userInitialState })
+export const emailListStream = createStreamDefinition('emailList', { evolve: emailListEvolve, initialState: emailListInitialState })
 
 await handleCommand({
   eventStore,
   streams: [
-    { handler: userHandler, id: userId },
-    { handler: emailListHandler, id: emailListId },
+    { definition: userStream, id: userId },
+    { definition: emailListStream, id: emailListId },
   ],
   command: subscribeCommand,
   commandHandlerFunction: ({ command, states }) => {
@@ -231,7 +231,7 @@ await handleCommand({
 
 ### Handling Commands — explicit `StreamConfig` (still supported)
 
-Pass `streamSubject`, `evolve`, and `initialState` directly if you prefer not to use `createStreamHandler`:
+Pass `streamSubject`, `evolve`, and `initialState` directly if you prefer not to use `createStreamDefinition`:
 
 ```typescript
 await handleCommand({

@@ -1,11 +1,11 @@
-import type { StreamHandler } from './streamHandler.types'
+import type { StreamDefinition } from './streamDefinition.types'
 
-export function createStreamHandler<TState, TEvent>(
+export function createStreamDefinition<TState, TEvent>(
   streamName: string,
   { evolve, initialState }: {
     evolve: (state: TState, event: TEvent) => TState
     initialState: () => TState
   },
-): StreamHandler<TState, TEvent> {
+): StreamDefinition<TState, TEvent> {
   return { streamName, evolve, initialState }
 }

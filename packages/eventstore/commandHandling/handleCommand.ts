@@ -16,11 +16,11 @@ export async function handleCommand<
 
   const aggregatedStreamStates: Map<Subject, any> = new Map()
   for (const stream of streams) {
-    const { streamSubject, evolve, initialState } = 'handler' in stream
+    const { streamSubject, evolve, initialState } = 'definition' in stream
       ? {
-          streamSubject: createStreamSubject(`${stream.handler.streamName}/${stream.id}`),
-          evolve: stream.handler.evolve,
-          initialState: stream.handler.initialState,
+          streamSubject: createStreamSubject(`${stream.definition.streamName}/${stream.id}`),
+          evolve: stream.definition.evolve,
+          initialState: stream.definition.initialState,
         }
       : stream
 

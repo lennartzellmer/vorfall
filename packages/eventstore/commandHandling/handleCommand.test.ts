@@ -5,7 +5,7 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { createDomainEvent, createEventStream } from '../utils/utilsEventStore'
 import { createStreamSubject } from '../utils/utilsSubject'
 import { handleCommand } from './handleCommand'
-import { createStreamHandler } from './streamHandler'
+import { createStreamDefinition } from './streamDefinition'
 import { createCommand } from './utilsCommand'
 
 describe('handleCommand', () => {
@@ -56,11 +56,11 @@ describe('handleCommand', () => {
       }),
     )
 
-    const testHandler = createStreamHandler('test', { evolve, initialState })
+    const testStream = createStreamDefinition('test', { evolve, initialState })
 
     const result = await handleCommand({
       eventStore: mockEventStore,
-      streams: [{ handler: testHandler, id: '123' }],
+      streams: [{ definition: testStream, id: '123' }],
       command: incrementCounterCommand,
       commandHandlerFunction,
     })
@@ -124,11 +124,11 @@ describe('handleCommand', () => {
       },
     )
 
-    const testHandler = createStreamHandler('test', { evolve, initialState })
+    const testStream = createStreamDefinition('test', { evolve, initialState })
 
     const result = await handleCommand({
       eventStore: mockEventStore,
-      streams: [{ handler: testHandler, id: '456' }],
+      streams: [{ definition: testStream, id: '456' }],
       command: incrementCounterCommand,
       commandHandlerFunction,
     })
@@ -208,11 +208,11 @@ describe('handleCommand', () => {
       },
     )
 
-    const testHandler = createStreamHandler('test', { evolve, initialState })
+    const testStream = createStreamDefinition('test', { evolve, initialState })
 
     const result = await handleCommand({
       eventStore: mockEventStore,
-      streams: [{ handler: testHandler, id: '789' }],
+      streams: [{ definition: testStream, id: '789' }],
       command: incrementTwiceCommand,
       commandHandlerFunction,
     })
@@ -340,14 +340,14 @@ describe('handleCommand', () => {
       },
     )
 
-    const userHandler = createStreamHandler('user', { evolve: userEvolve, initialState: userInitialState })
-    const emailListHandler = createStreamHandler('emailList', { evolve: emailListEvolve, initialState: emailListInitialState })
+    const userStream = createStreamDefinition('user', { evolve: userEvolve, initialState: userInitialState })
+    const emailListStream = createStreamDefinition('emailList', { evolve: emailListEvolve, initialState: emailListInitialState })
 
     const result = await handleCommand({
       eventStore: mockEventStore,
       streams: [
-        { handler: userHandler, id: '123' },
-        { handler: emailListHandler, id: '123' },
+        { definition: userStream, id: '123' },
+        { definition: emailListStream, id: '123' },
       ],
       command: subscribeCommand,
       commandHandlerFunction,
@@ -394,7 +394,7 @@ describe('handleCommand', () => {
     type CounterIncrementedEvent = DomainEvent<'counter.incremented', { incrementedBy: number }>
 
     const streamSubject = createStreamSubject('test/type-check')
-    const testHandler = createStreamHandler('test', {
+    const testStream = createStreamDefinition('test', {
       evolve: (state: { counter: number }) => state,
       initialState: () => ({ counter: 0 }),
     })
@@ -404,7 +404,7 @@ describe('handleCommand', () => {
 
     const result = await handleCommand({
       eventStore: mockEventStore,
-      streams: [{ handler: testHandler, id: 'type-check' }],
+      streams: [{ definition: testStream, id: 'type-check' }],
       command: createCommand({ type: 'Increment' }),
       commandHandlerFunction,
     })

@@ -1,6 +1,6 @@
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
 import type { AnyDomainEvent, Command, Subject } from '../types/index'
-import type { StreamHandlerRef } from './streamHandler.types'
+import type { StreamRef } from './streamDefinition.types'
 
 export type ExtractDomainEventFromReturnType<T>
   = T extends AnyDomainEvent ? T
@@ -21,7 +21,7 @@ export interface StreamConfig<State, TDomainEvent> {
   evolve: (state: State, event: TDomainEvent) => State
 }
 
-export type StreamEntry = StreamConfig<any, any> | StreamHandlerRef
+export type StreamEntry = StreamConfig<any, any> | StreamRef
 
 export type CommandHandlerFunction<
   CommandType extends string = string,
