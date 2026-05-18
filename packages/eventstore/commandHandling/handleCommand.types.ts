@@ -1,5 +1,5 @@
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
-import type { AnyDomainEvent, Command } from '../types/index'
+import type { AnyDomainEvent, Command, DefaultRecord } from '../types/index'
 import type { States, StreamRef } from './streamDefinition.types'
 
 export type ExtractDomainEventFromReturnType<T>
@@ -12,8 +12,6 @@ export type InferDomainEventFromCommandHandler<TCommandHandler>
   = TCommandHandler extends (...args: any[]) => infer ReturnType
     ? ExtractDomainEventFromReturnType<ReturnType>
     : never
-
-export type DefaultRecord = Record<string, unknown>
 
 export type CommandHandlerFunction<
   CommandType extends string = string,
