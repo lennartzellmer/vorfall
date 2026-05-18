@@ -20,7 +20,7 @@ export type CommandHandlerFunction<
   TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
 > = (params: {
   command: Command<CommandType, CommandData, CommandMetadata>
-  states?: States
+  states: States
 }) =>
   | TDomainEvent
   | TDomainEvent[]
@@ -31,7 +31,7 @@ export interface CommandHandlerOptions<
   CommandType extends string = string,
   CommandData extends DefaultRecord | undefined = undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  TCommandHandlerFunction extends (params: { command: Command<CommandType, CommandData, CommandMetadata>, states?: States }) => any = (params: { command: Command<CommandType, CommandData, CommandMetadata>, states?: States }) => any,
+  TCommandHandlerFunction extends (params: { command: Command<CommandType, CommandData, CommandMetadata>, states: States }) => any = (params: { command: Command<CommandType, CommandData, CommandMetadata>, states: States }) => any,
 > {
   eventStore: EventStoreInstance<any>
   streams: ReadonlyArray<StreamRef>

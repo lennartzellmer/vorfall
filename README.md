@@ -180,7 +180,7 @@ await handleCommand({
   streams: [userRef],
   command: registerCommand,
   commandHandlerFunction: ({ command, states }) => {
-    const state = states?.get(userRef) // typed as UserState
+    const state = states.get(userRef) // typed as UserState
 
     if (state?.isActive) {
       throw new Error('User already registered')
@@ -212,8 +212,8 @@ await handleCommand({
   streams: [userRef, emailListRef],
   command: subscribeCommand,
   commandHandlerFunction: ({ command, states }) => {
-    const userState = states?.get(userRef) // typed as UserState
-    const emailListState = states?.get(emailListRef) // typed as EmailListState
+    const userState = states.get(userRef) // typed as UserState
+    const emailListState = states.get(emailListRef) // typed as EmailListState
 
     if (emailListState.subscribers.length >= emailListState.maxSubscribers) {
       throw new Error('Email list is full')

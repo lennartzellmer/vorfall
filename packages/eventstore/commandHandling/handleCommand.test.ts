@@ -319,8 +319,8 @@ describe('handleCommand', () => {
 
     const commandHandlerFunction = vi.fn(
       ({ command, states }): [UserSubscribedEvent, EmailListSubscriptionAddedEvent] => {
-        const userState = states?.get(userStreamRef)
-        const emailListState = states?.get(emailListStreamRef)
+        const userState = states.get(userStreamRef)
+        const emailListState = states.get(emailListStreamRef)
 
         if (emailListState.subscribers.length >= emailListState.maxSubscribers) {
           throw new Error('Email list is full')
@@ -360,6 +360,10 @@ describe('handleCommand', () => {
       evolve: emailListEvolve,
       initialState: emailListInitialState,
     })
+
+    const capturedStates = commandHandlerFunction.mock.calls[0][0].states!
+    expect(capturedStates.get(userStreamRef)).toEqual(mockedUserState)
+    expect(capturedStates.get(emailListStreamRef)).toEqual(mockedEmailListState)
 
     expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith(
       expect.arrayContaining([
@@ -436,8 +440,8 @@ describe('handleCommand', () => {
       streams: [userStreamRef, emailListStreamRef],
       command: createCommand({ type: 'Test' }),
       commandHandlerFunction: ({ states }) => {
-        const userState = states?.get(userStreamRef)
-        const emailListState = states?.get(emailListStreamRef)
+        const userState = states.get(userStreamRef)
+        const emailListState = states.get(emailListStreamRef)
 
         expectTypeOf(userState).not.toBeAny()
         expectTypeOf(userState).toEqualTypeOf<UserState | undefined>()

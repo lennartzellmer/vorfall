@@ -16,7 +16,7 @@ export async function handleCommand<
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  TCommandHandlerFunction extends (params: { command: Command<CommandType, CommandData, CommandMetadata>, states?: States }) => any = (params: { command: Command<CommandType, CommandData, CommandMetadata>, states?: States }) => any,
+  TCommandHandlerFunction extends (params: { command: Command<CommandType, CommandData, CommandMetadata>, states: States }) => any = (params: { command: Command<CommandType, CommandData, CommandMetadata>, states: States }) => any,
 >(
   options: CommandHandlerOptions<CommandType, CommandData, CommandMetadata, TCommandHandlerFunction>,
 ): Promise<MultiStreamAppendResult<InferDomainEventFromCommandHandler<TCommandHandlerFunction>, any>> {
