@@ -1,46 +1,39 @@
 import type { MultiStreamAppendResult } from '../eventStore/eventStoreFactory.types'
-import type { Subject } from '../types/domainEvent.types'
-import type { CommandHandlerOptions, DefaultRecord, InferDomainEventFromCommandHandler, StreamConfig } from './handleCommand.types'
+import type { Command, DefaultRecord } from '../types/index'
+import type { CommandHandlerOptions, InferDomainEventFromCommandHandler } from './handleCommand.types'
+import type { States, StreamRef } from './streamDefinition.types'
+import { createStreamSubject } from '../utils/utilsSubject'
+
+function createStates(map: Map<string, any>): States {
+  return {
+    get<TState, TEvent>(ref: StreamRef<TState, TEvent>): TState | undefined {
+      return map.get(createStreamSubject(`${ref.definition.streamName}/${ref.id}`))
+    },
+  }
+}
 
 export async function handleCommand<
-  Streams extends ReadonlyArray<StreamConfig<any, any>>,
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  TCommandHandlerFunction extends (params: { command: any, states?: Map<Subject, any> }) => any = (params: { command: any, states?: Map<Subject, any> }) => any,
+  TCommandHandlerFunction extends (params: { command: Command<CommandType, CommandData, CommandMetadata>, states: States }) => any = (params: { command: Command<CommandType, CommandData, CommandMetadata>, states: States }) => any,
 >(
-  options: CommandHandlerOptions<Streams, CommandType, CommandData, CommandMetadata, TCommandHandlerFunction>,
+  options: CommandHandlerOptions<CommandType, CommandData, CommandMetadata, TCommandHandlerFunction>,
 ): Promise<MultiStreamAppendResult<InferDomainEventFromCommandHandler<TCommandHandlerFunction>, any>> {
-  const {
-    eventStore,
-    streams,
-    commandHandlerFunction,
-    command,
-  } = options
+  const { eventStore, streams, command, commandHandlerFunction } = options
 
-  /**
-   * Aggregate the state of the streams
-   * using the provided evolve functions and initial states
-   */
-  const aggregatedStreamStates: Map<Subject, any> = new Map()
+  const statesMap = new Map<string, any>()
   for (const stream of streams) {
-    const aggregatedStreamState = await eventStore.aggregateStream<any, InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(stream.streamSubject, {
-      evolve: stream.evolve,
-      initialState: stream.initialState,
+    const subject = createStreamSubject(`${stream.definition.streamName}/${stream.id}`)
+    const state = await eventStore.aggregateStream<any, InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(subject, {
+      evolve: stream.definition.evolve,
+      initialState: stream.definition.initialState,
     })
-    aggregatedStreamStates.set(stream.streamSubject, aggregatedStreamState)
+    statesMap.set(subject, state)
   }
 
-  /**
-   * Run the command handler in order to execute the business logic
-   * and return the events to append to the stream
-   */
-  const result = await commandHandlerFunction({ command, states: aggregatedStreamStates })
+  const result = await commandHandlerFunction({ command, states: createStates(statesMap) })
   const eventsToAppend = Array.isArray(result) ? result : [result]
 
-  const newState = await eventStore.appendOrCreateStream<InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(
-    eventsToAppend,
-  )
-
-  return newState
+  return eventStore.appendOrCreateStream<InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(eventsToAppend)
 }

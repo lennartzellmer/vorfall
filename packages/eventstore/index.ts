@@ -1,4 +1,6 @@
 export * from './commandHandling/handleCommand'
+export * from './commandHandling/streamDefinition'
+export * from './commandHandling/streamDefinition.types'
 export * from './commandHandling/utilsCommand'
 export * from './eventStore/eventStoreFactory'
 export * from './eventStore/eventStoreFactory.types'
