@@ -12,7 +12,14 @@ export interface ProjectionDefinition<
 > {
   name: TName
   canHandle: CanHandle<TEventType>
-  evolve: (state: TState, event: TEventType) => TState
+  /**
+   * `state` is null when the projection doesn't exist yet (before the first
+   * applicable event) or was deleted by a previous evolve call in the same
+   * batch. Returning `null` deletes the projection document: the event store
+   * removes `projections.<name>` from the stream instead of persisting a
+   * null value.
+   */
+  evolve: (state: TState | null, event: TEventType) => TState | null
   initialState: () => TState | null
 }
 

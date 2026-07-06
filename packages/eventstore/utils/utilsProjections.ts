@@ -22,7 +22,7 @@ export function createProjectionDefinition<
 >(config: {
   name: TName
   canHandle: CanHandle<TEvent>
-  evolve: (state: TState, event: TEvent) => TState
+  evolve: (state: TState | null, event: TEvent) => TState | null
   initialState: () => TState | null
 }): ProjectionDefinition<TState, TName, TEvent> {
   return {

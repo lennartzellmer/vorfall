@@ -84,12 +84,28 @@ async function processStreamInTransaction<
     )
 
     const setUpdates: Record<string, any> = {}
+    const unsetUpdates: Record<string, any> = {}
     for (const projection of applicableProjections) {
-      const state = events.reduce((state, event) => projection.evolve(state, event), result?.projections?.[projection.name] || projection.initialState())
-      setUpdates[`projections.${projection.name}`] = state
+      const state = events.reduce(
+        (state, event) => projection.evolve(state, event),
+        result?.projections?.[projection.name] ?? projection.initialState(),
+      )
+
+      if (state === null) {
+        unsetUpdates[`projections.${projection.name}`] = ''
+      }
+      else {
+        setUpdates[`projections.${projection.name}`] = state
+      }
     }
 
-    const projectionUpdates: UpdateFilter<EventStream<TDomainEvent, TProjections>> = { $set: setUpdates }
+    const projectionUpdates: UpdateFilter<EventStream<TDomainEvent, TProjections>> = {}
+    if (Object.keys(setUpdates).length > 0) {
+      projectionUpdates.$set = setUpdates
+    }
+    if (Object.keys(unsetUpdates).length > 0) {
+      projectionUpdates.$unset = unsetUpdates
+    }
     result = await collection.findOneAndUpdate(
       { streamSubject },
       projectionUpdates,
