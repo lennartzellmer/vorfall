@@ -119,8 +119,8 @@ describe('mongoClientWrapper Integration Tests', () => {
       const projectionDefinition = createProjectionDefinition({
         name: 'TestProjection',
         canHandle: ['user.created'],
-        evolve: (state: { count: number }) => {
-          return { count: state.count + 1 }
+        evolve: (state: { count: number } | null) => {
+          return { count: (state?.count ?? 0) + 1 }
         },
         initialState: () => ({ count: 0 }),
       })
@@ -136,8 +136,8 @@ describe('mongoClientWrapper Integration Tests', () => {
       const projectionDefinition = createProjectionDefinition({
         name: 'TestProjection',
         canHandle: ['user.created'],
-        evolve: (state: { count: number }) => {
-          return { count: state.count + 1 }
+        evolve: (state: { count: number } | null) => {
+          return { count: (state?.count ?? 0) + 1 }
         },
         initialState: () => ({ count: 0 }),
       })
@@ -208,8 +208,8 @@ describe('mongoClientWrapper Integration Tests', () => {
       const projectionDefinition = createProjectionDefinition({
         name: 'EventCountProjection',
         canHandle: ['user.created'],
-        evolve: (state: { count: number }) => {
-          return { count: state.count + 1 }
+        evolve: (state: { count: number } | null) => {
+          return { count: (state?.count ?? 0) + 1 }
         },
         initialState: () => ({ count: 0 }),
       })
