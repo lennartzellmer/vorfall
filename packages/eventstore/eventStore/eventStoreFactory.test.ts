@@ -119,8 +119,8 @@ describe('mongoClientWrapper Integration Tests', () => {
       const projectionDefinition = createProjectionDefinition({
         name: 'TestProjection',
         canHandle: ['user.created'],
-        evolve: (state: { count: number }) => {
-          return { count: state.count + 1 }
+        evolve: (state: { count: number } | null) => {
+          return { count: (state?.count ?? 0) + 1 }
         },
         initialState: () => ({ count: 0 }),
       })
@@ -136,8 +136,8 @@ describe('mongoClientWrapper Integration Tests', () => {
       const projectionDefinition = createProjectionDefinition({
         name: 'TestProjection',
         canHandle: ['user.created'],
-        evolve: (state: { count: number }) => {
-          return { count: state.count + 1 }
+        evolve: (state: { count: number } | null) => {
+          return { count: (state?.count ?? 0) + 1 }
         },
         initialState: () => ({ count: 0 }),
       })
@@ -208,8 +208,8 @@ describe('mongoClientWrapper Integration Tests', () => {
       const projectionDefinition = createProjectionDefinition({
         name: 'EventCountProjection',
         canHandle: ['user.created'],
-        evolve: (state: { count: number }) => {
-          return { count: state.count + 1 }
+        evolve: (state: { count: number } | null) => {
+          return { count: (state?.count ?? 0) + 1 }
         },
         initialState: () => ({ count: 0 }),
       })
@@ -243,6 +243,110 @@ describe('mongoClientWrapper Integration Tests', () => {
 
       expect(stream1?.projections?.EventCountProjection).toEqual({ count: 1 })
       expect(stream2?.projections?.EventCountProjection).toEqual({ count: 1 })
+    })
+
+    describe('projection deletion via null evolve return', () => {
+      const deletionProjection = createProjectionDefinition({
+        name: 'DeletionProjection',
+        canHandle: ['user.created', 'user.deleted'],
+        evolve: (state: { count: number } | null, event: { type: string }) => {
+          if (event.type === 'user.deleted')
+            return null
+          return { count: (state?.count ?? 0) + 1 }
+        },
+        initialState: () => null,
+      })
+
+      it('should $unset the projection field when evolve returns null', async () => {
+        const testEventStore = createEventStore({ connectionString, projections: [deletionProjection] })
+        await testEventStore.getInstanceMongoClientWrapper().waitForConnection()
+
+        const subject = createSubject('user/999/created')
+        const streamSubject = getStreamSubjectFromSubject(subject)
+
+        const created = createDomainEvent({
+          type: 'user.created',
+          subject,
+          data: { name: 'Erin Example', email: 'erin@example.com' },
+        })
+
+        const createdResult = await testEventStore.appendOrCreateStream([created])
+        expect(createdResult.streams[0]?.projections?.DeletionProjection).toEqual({ count: 1 })
+
+        const deleted = createDomainEvent({
+          type: 'user.deleted',
+          subject,
+        })
+
+        const deletedResult = await testEventStore.appendOrCreateStream([deleted])
+        expect(deletedResult.streams[0]?.projections?.DeletionProjection).toBeUndefined()
+
+        // The field must be removed from the stored document (via $unset), not merely set to null
+        const rawDocument = await testEventStore.getCollectionBySubject(streamSubject).findOne({ streamSubject })
+        expect(rawDocument?.projections).not.toHaveProperty('DeletionProjection')
+      })
+
+      it('should re-evolve from initial state after the projection was previously deleted', async () => {
+        const testEventStore = createEventStore({ connectionString, projections: [deletionProjection] })
+        await testEventStore.getInstanceMongoClientWrapper().waitForConnection()
+
+        const subject = createSubject('user/998/created')
+
+        const created = createDomainEvent({ type: 'user.created', subject })
+        const deleted = createDomainEvent({ type: 'user.deleted', subject })
+        const recreated = createDomainEvent({ type: 'user.created', subject })
+
+        await testEventStore.appendOrCreateStream([created])
+        await testEventStore.appendOrCreateStream([deleted])
+        const result = await testEventStore.appendOrCreateStream([recreated])
+
+        // Started fresh from initialState() (null) rather than continuing the previous count
+        expect(result.streams[0]?.projections?.DeletionProjection).toEqual({ count: 1 })
+      })
+
+      it('should delete the projection when both events land in the same append call', async () => {
+        const testEventStore = createEventStore({ connectionString, projections: [deletionProjection] })
+        await testEventStore.getInstanceMongoClientWrapper().waitForConnection()
+
+        const subject = createSubject('user/997/created')
+
+        const created = createDomainEvent({ type: 'user.created', subject })
+        const deleted = createDomainEvent({ type: 'user.deleted', subject })
+
+        const result = await testEventStore.appendOrCreateStream([created, deleted])
+
+        expect(result.streams[0]?.projections?.DeletionProjection).toBeUndefined()
+      })
+
+      it('should combine $set and $unset in a single append call when one projection is updated and a sibling projection is deleted', async () => {
+        const keepProjection = createProjectionDefinition({
+          name: 'KeepProjection',
+          canHandle: ['user.created', 'user.deleted'],
+          evolve: (state: { count: number } | null) => ({ count: (state?.count ?? 0) + 1 }),
+          initialState: () => null,
+        })
+
+        const testEventStore = createEventStore({
+          connectionString,
+          projections: [deletionProjection, keepProjection],
+        })
+        await testEventStore.getInstanceMongoClientWrapper().waitForConnection()
+
+        const subject = createSubject('user/996/created')
+
+        // Seed both projections with a non-null state so the second call below
+        // exercises an update ($set), not just an initial creation.
+        const created = createDomainEvent({ type: 'user.created', subject })
+        await testEventStore.appendOrCreateStream([created])
+
+        // This single append call is what's under test: DeletionProjection evolves
+        // to null ($unset) while KeepProjection evolves to a new state ($set).
+        const deleted = createDomainEvent({ type: 'user.deleted', subject })
+        const result = await testEventStore.appendOrCreateStream([deleted])
+
+        expect(result.streams[0]?.projections?.DeletionProjection).toBeUndefined()
+        expect(result.streams[0]?.projections?.KeepProjection).toEqual({ count: 2 })
+      })
     })
   })
 

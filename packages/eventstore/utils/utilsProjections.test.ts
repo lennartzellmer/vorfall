@@ -155,6 +155,94 @@ describe('findSingleProjection', () => {
   })
 })
 
+describe('projection deletion via null evolve return', () => {
+  let replSet: MongoMemoryReplSet
+  let eventStore: EventStoreInstance<typeof projectionDefinition[]>
+  let connectionString: string
+
+  type SaltAddedEvent = DomainEvent<'recepie.salt.added', { amount: number }, undefined>
+  type SaltRemovedEvent = DomainEvent<'recepie.salt.removed', undefined, undefined>
+  type TestEvents = SaltAddedEvent | SaltRemovedEvent
+
+  const projectionDefinition = createProjectionDefinition({
+    name: 'testProjection',
+    evolve: (state: { saltAdded: number } | null, event: TestEvents) => {
+      if (event.type === 'recepie.salt.removed')
+        return null
+      if (!state)
+        return { saltAdded: event.data.amount }
+      return { ...state, saltAdded: state.saltAdded + event.data.amount }
+    },
+    canHandle: ['recepie.salt.added', 'recepie.salt.removed'],
+    initialState: () => null,
+  })
+
+  beforeAll(async () => {
+    // Start in-memory MongoDB replica set for transaction support
+    replSet = await MongoMemoryReplSet.create({
+      replSet: { count: 3 }, // Create a replica set with 3 members
+    })
+    connectionString = replSet.getUri()
+    eventStore = createEventStore({ connectionString, projections: [projectionDefinition] })
+    await eventStore.getInstanceMongoClientWrapper().waitForConnection()
+  })
+
+  afterEach(async () => {
+    // Clean up collections between tests
+    const db = eventStore.getInstanceMongoClientWrapper().getDatabase()
+    const collections = await db.collections()
+    for (const collection of collections) {
+      await collection.drop()
+    }
+  })
+
+  afterAll(async () => {
+    await eventStore.getInstanceMongoClientWrapper().close()
+    await replSet.stop()
+  })
+
+  it('should no longer find a deleted projection with findOneProjection', async () => {
+    const testSubject = createSubject('recepie/555')
+    const streamSubject = getStreamSubjectFromSubject(testSubject)
+
+    await eventStore.appendOrCreateStream([
+      createDomainEvent({ type: 'recepie.salt.added', subject: testSubject, data: { amount: 1 } }),
+    ])
+    await eventStore.appendOrCreateStream([
+      createDomainEvent({ type: 'recepie.salt.removed', subject: testSubject }),
+    ])
+
+    const projection = await findOneProjection(eventStore, streamSubject, {
+      projectionName: 'testProjection',
+    })
+
+    expect(projection).toBeNull()
+  })
+
+  it('should exclude a deleted projection from findMultipleProjections and countProjections', async () => {
+    const keptSubject = createSubject('recepie/601')
+    const deletedSubject = createSubject('recepie/602')
+
+    await eventStore.appendOrCreateStream([
+      createDomainEvent({ type: 'recepie.salt.added', subject: keptSubject, data: { amount: 1 } }),
+    ])
+    await eventStore.appendOrCreateStream([
+      createDomainEvent({ type: 'recepie.salt.added', subject: deletedSubject, data: { amount: 1 } }),
+    ])
+    await eventStore.appendOrCreateStream([
+      createDomainEvent({ type: 'recepie.salt.removed', subject: deletedSubject }),
+    ])
+
+    const streamFilter = { projectionName: 'testProjection' } as const
+
+    const projections = await findMultipleProjections(eventStore, 'recepie', streamFilter, { skip: 0, limit: 50 })
+    expect(projections.length).toBe(1)
+
+    const count = await countProjections(eventStore, 'recepie', streamFilter)
+    expect(count).toBe(1)
+  })
+})
+
 describe('findMultipleProjections', () => {
   let replSet: MongoMemoryReplSet
   let eventStore: EventStoreInstance<typeof projectionDefinitions>
