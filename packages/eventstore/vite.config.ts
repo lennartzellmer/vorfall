@@ -19,7 +19,7 @@ export default defineConfig({
       fileName: 'index',
       formats: ['es', 'cjs'],
     },
-    rollupOptions: {
+    rolldownOptions: {
       external: ['mongodb', 'cloudevents', 'node:crypto'],
     },
     outDir: 'dist',

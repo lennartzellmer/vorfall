@@ -38,7 +38,7 @@ export default defineConfig({
     reporters: ['verbose'],
   },
 
-  esbuild: {
+  oxc: {
     target: 'esnext',
   },
 
