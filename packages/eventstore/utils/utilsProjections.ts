@@ -1,7 +1,14 @@
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
-import type { EventStream, ProjectionQuery } from '../eventStore/eventStoreFactory.types'
+import type { EventStreamWithProjection, ProjectionQuery } from '../eventStore/eventStoreFactory.types'
 import type { AnyDomainEvent, Brand, DefaultRecord, Subject } from '../types/index'
-import type { CanHandle, ProjectionDefinition, ProjectionQueryOptions } from './utilsProjections.types'
+import type {
+  AnyProjectionDefinition,
+  CanHandle,
+  ProjectionDefinition,
+  ProjectionNames,
+  ProjectionQueryOptions,
+  ProjectionStateOf,
+} from './utilsProjections.types'
 import { transformFilterForNestedPath } from './utilsMongoFilter'
 
 /**
@@ -43,12 +50,13 @@ export function createProjectionDefinition<
  * @template TProjections - The type of projections defined in the event store
  */
 export async function findOneProjection<
-  TProjections extends readonly ProjectionDefinition<any, any, any>[],
+  TProjections extends readonly AnyProjectionDefinition[],
+  const TProjectionName extends ProjectionNames<TProjections>,
 >(
   eventStore: EventStoreInstance<TProjections>,
   streamSubject: Subject,
-  query: ProjectionQuery<TProjections[number]['name']>,
-): Promise<(EventStream<AnyDomainEvent, TProjections> & { projections: NonNullable<EventStream<AnyDomainEvent, TProjections>['projections']> }) | null> {
+  query: ProjectionQuery<TProjectionName>,
+): Promise<EventStreamWithProjection<TProjections, TProjectionName> | null> {
   const { projectionName, projectionQuery } = query
   const collection = eventStore.getCollectionBySubject(streamSubject)
 
@@ -75,7 +83,7 @@ export async function findOneProjection<
     },
   )
 
-  return result as (EventStream<AnyDomainEvent, TProjections> & { projections: NonNullable<EventStream<AnyDomainEvent, TProjections>['projections']> }) | null
+  return result as EventStreamWithProjection<TProjections, TProjectionName> | null
 }
 
 /**
@@ -93,8 +101,8 @@ type EntityFromSubject<TSubject extends Subject> = SubjectValue<TSubject> extend
   : never
 
 type ProjectionEntity<
-  TProjections extends readonly ProjectionDefinition<any, any, any>[],
-  TProjectionName extends TProjections[number]['name'],
+  TProjections extends readonly AnyProjectionDefinition[],
+  TProjectionName extends ProjectionNames<TProjections>,
 > = Extract<TProjections[number], { name: TProjectionName }> extends ProjectionDefinition<any, any, infer TEventType>
   ? TEventType extends { subject: infer TSubject }
     ? TSubject extends Subject
@@ -104,16 +112,14 @@ type ProjectionEntity<
   : never
 
 export async function findMultipleProjections<
-  TProjections extends readonly ProjectionDefinition<any, any, any>[],
-  TProjectionName extends TProjections[number]['name'],
+  TProjections extends readonly AnyProjectionDefinition[],
+  const TProjectionName extends ProjectionNames<TProjections>,
 >(
   eventStore: EventStoreInstance<TProjections>,
   entity: ProjectionEntity<TProjections, TProjectionName>,
   query: ProjectionQuery<TProjectionName>,
   queryOptions: ProjectionQueryOptions,
-): Promise<Array<TProjections extends readonly ProjectionDefinition<any, any, any>[]
-  ? NonNullable<EventStream<AnyDomainEvent, TProjections>['projections']>[TProjectionName]
-  : unknown>> {
+): Promise<Array<ProjectionStateOf<TProjections, TProjectionName>>> {
   const { projectionName, projectionQuery } = query
 
   // If entity includes a / that means it cannot be a collection name of an entity. The function should throw an error then.
@@ -132,9 +138,11 @@ export async function findMultipleProjections<
     filters.push(queryTransfomed)
   }
 
-  let mongoQuery = collection.find<
-    EventStream<AnyDomainEvent, TProjections>
-  >(
+  // The mongo projection only returns the `projections` sub-document, and only
+  // the key that was queried by name.
+  let mongoQuery = collection.find<{
+    projections?: Partial<Record<TProjectionName, ProjectionStateOf<TProjections, TProjectionName>>>
+  }>(
     { $and: filters },
     {
       useBigInt64: true,
@@ -157,11 +165,9 @@ export async function findMultipleProjections<
 
   const streams = await mongoQuery.toArray()
 
-  const result = streams.map(stream => stream.projections?.[projectionName]).filter(Boolean)
-
-  return result as Array<TProjections extends readonly ProjectionDefinition<any, any, any>[]
-    ? NonNullable<EventStream<AnyDomainEvent, TProjections>['projections']>[TProjectionName]
-    : unknown>
+  return streams
+    .map(stream => stream.projections?.[projectionName])
+    .filter((state): state is ProjectionStateOf<TProjections, TProjectionName> => state != null)
 }
 
 /**
@@ -172,8 +178,8 @@ export async function findMultipleProjections<
  * @returns A promise that resolves to the count of projections
  */
 export async function countProjections<
-  TProjections extends readonly ProjectionDefinition<any, any, any>[],
-  TProjectionName extends TProjections[number]['name'],
+  TProjections extends readonly AnyProjectionDefinition[],
+  const TProjectionName extends ProjectionNames<TProjections>,
 >(
   eventStore: EventStoreInstance<TProjections>,
   entity: ProjectionEntity<TProjections, TProjectionName>,
