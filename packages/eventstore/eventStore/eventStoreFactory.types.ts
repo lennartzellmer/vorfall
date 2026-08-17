@@ -1,6 +1,6 @@
 import type { Document, Filter } from 'mongodb'
 import type { AnyDomainEvent, Subject } from '../types/index'
-import type { ProjectionDefinition } from '../utils/utilsProjections.types'
+import type { ProjectionDefinition, ProjectionNames, ProjectionStates, ProjectionStatesWith } from '../utils/utilsProjections.types'
 
 export interface EventStoreOptions<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined> {
   connectionString: string
@@ -19,8 +19,20 @@ export interface EventStream<
     updatedAt: Date
   }
   projections?: P extends readonly ProjectionDefinition<any, any, any>[]
-    ? { [K in P[number] as K['name']]: ReturnType<K['evolve']> }
+    ? ProjectionStates<P>
     : undefined
+}
+
+/**
+ * The result of a projection query: an event stream on which the projection
+ * that was queried by name is guaranteed to be present and non-null.
+ */
+export type EventStreamWithProjection<
+  TProjections extends readonly ProjectionDefinition<any, any, any>[],
+  TProjectionName extends ProjectionNames<TProjections>,
+  TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
+> = Omit<EventStream<TDomainEvent, TProjections>, 'projections'> & {
+  projections: ProjectionStatesWith<TProjections, TProjectionName>
 }
 
 export interface ReadStreamResult<
