@@ -1,5 +1,20 @@
 # vorfall
 
+## 0.3.0
+
+### Minor Changes
+
+- 9a095e0: `createEventStore` now accepts all `MongoClientWrapperOptions` (`databaseName`, `options`, `maxRetries`, `retryDelayMs`) in addition to `connectionString`. Previously only the connection string was forwarded, so all data always landed in the database named `default`. `MongoClientWrapperOptions` is now exported from the package root.
+- 9a095e0: Ship ESM only. The `require` condition in `exports` pointed at the ESM build and was broken for CommonJS consumers; instead of fixing it, the CJS build is dropped entirely. The package now publishes a single ES module entry (`dist/index.js`).
+
+### Patch Changes
+
+- 9a095e0: `createDomainEvent` now sets the spec-compliant CloudEvents `time` attribute instead of a non-standard `date` extension attribute, and no longer emits the non-standard `version` attribute. Events created before this change carry `date`/`version` as extension attributes; newly created events carry `time`.
+- 9a095e0: Fix a crash on startup when MongoDB is unreachable: the fire-and-forget connect in the `MongoClientWrapper` constructor produced an unhandled promise rejection once all retries were exhausted, which terminates the process on Node >= 15. The rejection is now consumed; connection errors still surface via `waitForConnection()` or the first database operation.
+- 9a095e0: Projections no longer receive events outside their `canHandle` list. Previously, when a batch contained at least one applicable event, `evolve` was called with every event in the batch — including types the projection never declared — forcing every evolve implementation to defensively ignore unknown types. Events are now filtered per projection before folding.
+- 9a095e0: Rewrite the README to match the actual API: `createEventStore` is synchronous and takes `connectionString`/`databaseName` (not `mongoUrl`), `canHandle` is a list of event types (not a type-guard function), events are created via `createDomainEvent`/`createSubject`, and appends go through `appendOrCreateStream`. Documents the replica-set requirement for transactions and the ESM-only build, and removes placeholder documentation links.
+- 9a095e0: `appendOrCreateStream` now ensures a unique index on `streamSubject` (once per collection, before the transaction starts). Without it, concurrent upserts for the same new stream could insert duplicate stream documents, and every stream lookup was a collection scan. Note for existing databases: if a collection already contains duplicate `streamSubject` documents, index creation — and therefore the append — will fail until the duplicates are resolved.
+
 ## 0.2.0
 
 ### Minor Changes
