@@ -128,8 +128,9 @@ async function processStreamInTransaction<
 export function createEventStore<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined>(
   options: EventStoreOptions<TProjections>,
 ): EventStoreInstance<TProjections> {
-  const mongoClient = new MongoClientWrapper({ connectionString: options.connectionString })
-  const projections = options.projections || ([] as unknown as TProjections)
+  const { projections: configuredProjections, ...mongoClientOptions } = options
+  const mongoClient = new MongoClientWrapper(mongoClientOptions)
+  const projections = configuredProjections || ([] as unknown as TProjections)
 
   const eventStore: EventStoreInstance<TProjections> = {
     getInstanceMongoClientWrapper(): MongoClientWrapper {
