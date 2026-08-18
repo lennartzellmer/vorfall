@@ -26,8 +26,11 @@ export class MongoClientWrapper {
       ...config.options,
     })
 
-    // Start connection immediately but don't await it
-    this.connect()
+    // Start connection immediately but don't await it. The rejection must be
+    // consumed here, otherwise a failed connection crashes the process as an
+    // unhandled rejection; the error still surfaces via waitForConnection()
+    // or the first database operation.
+    this.connect().catch(() => {})
   }
 
   /**
