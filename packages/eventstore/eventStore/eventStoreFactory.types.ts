@@ -2,6 +2,7 @@ import type { Document, Filter } from 'mongodb'
 import type { MongoClientWrapperOptions } from '../mongoClient/mongoClientWrapper.types'
 import type { AnyDomainEvent, Subject } from '../types/index'
 import type { ProjectionDefinition, ProjectionNames, ProjectionStates, ProjectionStatesWith } from '../utils/utilsProjections.types'
+import type { ExpectedStreamVersion } from './concurrencyError'
 
 export interface EventStoreOptions<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined> extends MongoClientWrapperOptions {
   projections?: TProjections
@@ -14,6 +15,8 @@ export interface EventStream<
   streamId: string
   streamSubject: Subject
   events: Array<TDomainEvent>
+  /** Number of events in the stream, used for optimistic concurrency checks */
+  version: number
   metadata: {
     createdAt: Date
     updatedAt: Date
@@ -40,6 +43,24 @@ export interface ReadStreamResult<
 > {
   events: Array<TDomainEvent>
   streamExists: boolean
+  /** Current stream version (0 if the stream does not exist) */
+  version: number
+}
+
+export interface AggregateStreamResult<State> {
+  state: State
+  streamExists: boolean
+  /** Stream version at read time; pass as expectedVersion when appending */
+  version: number
+}
+
+export interface AppendStreamOptions {
+  /**
+   * Expected version per stream subject. Streams not listed are appended
+   * unconditionally ('any'). On a mismatch the whole append (all streams in
+   * the call) is rolled back with a ConcurrencyError.
+   */
+  expectedVersions?: ReadonlyMap<Subject, ExpectedStreamVersion>
 }
 
 export interface ProjectionQuery<TProjectionName extends string> {

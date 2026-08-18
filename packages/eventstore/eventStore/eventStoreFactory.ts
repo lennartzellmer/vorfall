@@ -1,11 +1,14 @@
-import type { ClientSession, Collection, PushOperator, UpdateFilter } from 'mongodb'
+import type { ClientSession, Collection, Filter, OptionalUnlessRequiredId, PushOperator, UpdateFilter } from 'mongodb'
 import type { AnyDomainEvent, Subject } from '../types/index'
 import type { ProjectionDefinition } from '../utils/utilsProjections.types'
-import type { EventStoreOptions, EventStream, MultiStreamAppendResult, ReadStreamResult } from './eventStoreFactory.types'
+import type { ExpectedStreamVersion } from './concurrencyError'
+import type { AggregateStreamResult, AppendStreamOptions, EventStoreOptions, EventStream, MultiStreamAppendResult, ReadStreamResult } from './eventStoreFactory.types'
 import { randomUUID } from 'node:crypto'
+import { MongoServerError } from 'mongodb'
 import { MongoClientWrapper } from '../mongoClient/mongoClientWrapper'
 import { groupEventsByStreamSubject } from '../utils/utilsEventStore'
 import { getCollectionNameFromSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject'
+import { ConcurrencyError } from './concurrencyError'
 
 export interface EventStoreInstance<
   TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
@@ -29,9 +32,10 @@ export interface EventStoreInstance<
       evolve: (state: State, event: TDomainEvent) => State
       initialState: () => State
     },
-  ) => Promise<State>
+  ) => Promise<AggregateStreamResult<State>>
   appendOrCreateStream: <TDomainEvent extends AnyDomainEvent>(
     events: Array<TDomainEvent>,
+    options?: AppendStreamOptions,
   ) => Promise<MultiStreamAppendResult<TDomainEvent, TProjections>>
 }
 
@@ -46,36 +50,90 @@ async function processStreamInTransaction<
   events: Array<TDomainEvent>,
   collection: Collection<EventStream<TDomainEvent, TProjections>>,
   projections: TProjections,
+  expectedVersion: ExpectedStreamVersion,
   session?: ClientSession,
 ): Promise<EventStream<TDomainEvent, TProjections>> {
   const now = new Date()
 
-  const updates: UpdateFilter<EventStream<TDomainEvent, TProjections>> = {
-    $setOnInsert: {
-      'streamId': randomUUID(),
-      'metadata.createdAt': now,
-      streamSubject,
-    },
-    $set: {
-      'metadata.updatedAt': now,
-    },
-    $push: {
-      events: { $each: events },
-    } as PushOperator<EventStream<TDomainEvent, TProjections>>,
-  }
+  let result: EventStream<TDomainEvent, TProjections> | null
 
-  let result = await collection.findOneAndUpdate(
-    { streamSubject },
-    updates,
-    {
-      useBigInt64: true,
-      upsert: true,
-      ignoreUndefined: true,
-      returnDocument: 'after',
-      projection: { _id: 0 },
-      ...(session && { session }),
-    },
-  )
+  if (expectedVersion === 'no-stream' || expectedVersion === 0) {
+    const newStream = {
+      streamId: randomUUID(),
+      streamSubject,
+      events,
+      version: events.length,
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+      },
+    } as OptionalUnlessRequiredId<EventStream<TDomainEvent, TProjections>>
+
+    try {
+      await collection.insertOne(newStream, {
+        ignoreUndefined: true,
+        ...(session && { session }),
+      })
+    }
+    catch (error) {
+      // The unique index on streamSubject rejects a concurrent create. The
+      // actual version cannot be read here: the failed write already aborted
+      // the transaction.
+      if (error instanceof MongoServerError && error.code === 11000) {
+        throw new ConcurrencyError(streamSubject, expectedVersion)
+      }
+      throw error
+    }
+
+    delete (newStream as { _id?: unknown })._id
+    result = newStream as EventStream<TDomainEvent, TProjections>
+  }
+  else {
+    const versionFilter: Filter<EventStream<TDomainEvent, TProjections>>
+      = typeof expectedVersion === 'number'
+        ? ({ streamSubject, version: expectedVersion } as Filter<EventStream<TDomainEvent, TProjections>>)
+        : ({ streamSubject } as Filter<EventStream<TDomainEvent, TProjections>>)
+
+    const updates: UpdateFilter<EventStream<TDomainEvent, TProjections>> = {
+      $setOnInsert: {
+        'streamId': randomUUID(),
+        'metadata.createdAt': now,
+        streamSubject,
+      },
+      $set: {
+        'metadata.updatedAt': now,
+      },
+      $inc: {
+        version: events.length,
+      } as NonNullable<UpdateFilter<EventStream<TDomainEvent, TProjections>>['$inc']>,
+      $push: {
+        events: { $each: events },
+      } as PushOperator<EventStream<TDomainEvent, TProjections>>,
+    }
+
+    result = await collection.findOneAndUpdate(
+      versionFilter,
+      updates,
+      {
+        useBigInt64: true,
+        // With an exact expected version an upsert would create a second
+        // document on a version mismatch instead of failing the check.
+        upsert: expectedVersion === 'any',
+        ignoreUndefined: true,
+        returnDocument: 'after',
+        projection: { _id: 0 },
+        ...(session && { session }),
+      },
+    )
+
+    if (!result && typeof expectedVersion === 'number') {
+      const actual = await collection.findOne(
+        { streamSubject } as Filter<EventStream<TDomainEvent, TProjections>>,
+        { projection: { version: 1, events: 1 }, ...(session && { session }) },
+      )
+      throw new ConcurrencyError(streamSubject, expectedVersion, actual ? actual.version ?? actual.events.length : undefined)
+    }
+  }
 
   if (projections && projections.length > 0) {
     const eventTypes = events.map(event => event.type)
@@ -134,16 +192,45 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
   const mongoClient = new MongoClientWrapper(mongoClientOptions)
   const projections = configuredProjections || ([] as unknown as TProjections)
 
+  // Replica set elections interrupt the majority write concern of otherwise
+  // successful writes (e.g. InterruptedDueToReplStateChange). The ensure
+  // operations are idempotent, so retrying on stepdown-related codes is safe.
+  const TRANSIENT_WRITE_CODES = new Set([11602, 91, 189, 10107])
+  async function retryTransient<T>(op: () => Promise<T>): Promise<T> {
+    let lastError: unknown
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await op()
+      }
+      catch (error) {
+        if (!(error instanceof MongoServerError) || !TRANSIENT_WRITE_CODES.has(Number(error.code))) {
+          throw error
+        }
+        lastError = error
+      }
+    }
+    throw lastError
+  }
+
   // Index creation is not allowed inside a transaction, so the unique index on
-  // streamSubject is ensured (once per collection) before appends start.
-  const ensuredIndexes = new Map<string, Promise<string>>()
-  function ensureStreamSubjectIndex(collection: Collection<any>): Promise<string> {
+  // streamSubject is ensured (once per collection) before appends start. The
+  // same step backfills the version field on documents written before
+  // versioning existed — the $inc on append would otherwise start at 0 and the
+  // exact-version filter would never match them.
+  const ensuredCollections = new Map<string, Promise<unknown>>()
+  function ensureCollectionReady(collection: Collection<any>): Promise<unknown> {
     const key = collection.collectionName
-    let ensured = ensuredIndexes.get(key)
+    let ensured = ensuredCollections.get(key)
     if (!ensured) {
-      ensured = collection.createIndex({ streamSubject: 1 }, { unique: true })
-      ensured.catch(() => ensuredIndexes.delete(key))
-      ensuredIndexes.set(key, ensured)
+      ensured = Promise.all([
+        retryTransient(() => collection.createIndex({ streamSubject: 1 }, { unique: true })),
+        retryTransient(() => collection.updateMany(
+          { version: { $exists: false } },
+          [{ $set: { version: { $size: '$events' } } }],
+        )),
+      ])
+      ensured.catch(() => ensuredCollections.delete(key))
+      ensuredCollections.set(key, ensured)
     }
     return ensured
   }
@@ -185,11 +272,15 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
         return {
           events: [],
           streamExists: false,
+          version: 0,
         }
       }
       return {
         events: stream.events,
         streamExists: true,
+        // Documents written before versioning existed carry no version field
+        // until the first append backfills the collection.
+        version: stream.version ?? stream.events.length,
       }
     },
 
@@ -202,61 +293,25 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
         evolve: (state: State, event: TDomainEvent) => State
         initialState: () => State
       },
-    ): Promise<State> {
+    ): Promise<AggregateStreamResult<State>> {
       const { evolve, initialState } = options
-      const { events } = await this.getEventStreamBySubject<TDomainEvent>(streamSubject)
-      if (!events) {
-        return initialState()
-      }
+      const { events, streamExists, version } = await this.getEventStreamBySubject<TDomainEvent>(streamSubject)
       const state = events.reduce((state, event) => evolve(state, event), initialState())
-      return state
+      return { state, streamExists, version }
     },
 
     async appendOrCreateStream<TDomainEvent extends AnyDomainEvent>(
       events: Array<TDomainEvent>,
+      options?: AppendStreamOptions,
     ): Promise<MultiStreamAppendResult<TDomainEvent, TProjections>> {
       if (!events || events.length === 0) {
         throw new Error('Cannot process an empty array of events')
       }
 
-      // Group events by stream subject
       const eventGroups = groupEventsByStreamSubject(events)
 
-      // If all events belong to the same stream, we can optimize by avoiding transaction overhead
-      if (eventGroups.size === 1) {
-        const firstEntry = eventGroups.entries().next().value as [Subject, Array<TDomainEvent>]
-        const [streamSubject, streamEvents] = firstEntry
-        const collection = this.getCollectionBySubject<TDomainEvent>(streamSubject)
-        await ensureStreamSubjectIndex(collection)
-
-        const client = mongoClient.getClient()
-        const session = client.startSession()
-
-        try {
-          const result = await session.withTransaction(async () => {
-            return await processStreamInTransaction(
-              streamSubject,
-              streamEvents,
-              collection,
-              projections,
-              session,
-            )
-          })
-
-          return {
-            streams: [result],
-            totalEventsAppended: events.length,
-            streamSubjects: [streamSubject],
-          }
-        }
-        finally {
-          await session.endSession()
-        }
-      }
-
-      // Handle multiple streams with MongoDB transaction
       for (const streamSubject of eventGroups.keys()) {
-        await ensureStreamSubjectIndex(this.getCollectionBySubject(streamSubject))
+        await ensureCollectionReady(this.getCollectionBySubject(streamSubject))
       }
 
       const client = mongoClient.getClient()
@@ -273,6 +328,7 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
               streamEvents,
               collection,
               projections,
+              options?.expectedVersions?.get(streamSubject) ?? 'any',
               session,
             )
             streamResults.push(result)
