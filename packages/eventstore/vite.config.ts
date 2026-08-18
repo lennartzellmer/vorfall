@@ -17,7 +17,7 @@ export default defineConfig({
       entry: resolve(__dirname, 'index.ts'),
       name: 'Vorfall',
       fileName: 'index',
-      formats: ['es', 'cjs'],
+      formats: ['es'],
     },
     rolldownOptions: {
       external: ['mongodb', 'cloudevents', 'node:crypto'],
