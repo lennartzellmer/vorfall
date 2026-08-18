@@ -1,9 +1,9 @@
 import type { Document, Filter } from 'mongodb'
+import type { MongoClientWrapperOptions } from '../mongoClient/mongoClientWrapper.types'
 import type { AnyDomainEvent, Subject } from '../types/index'
 import type { ProjectionDefinition, ProjectionNames, ProjectionStates, ProjectionStatesWith } from '../utils/utilsProjections.types'
 
-export interface EventStoreOptions<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined> {
-  connectionString: string
+export interface EventStoreOptions<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined> extends MongoClientWrapperOptions {
   projections?: TProjections
 }
 

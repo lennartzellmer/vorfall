@@ -86,10 +86,12 @@ async function processStreamInTransaction<
     const setUpdates: Record<string, any> = {}
     const unsetUpdates: Record<string, any> = {}
     for (const projection of applicableProjections) {
-      const state = events.reduce(
-        (state, event) => projection.evolve(state, event),
-        result?.projections?.[projection.name] ?? projection.initialState(),
-      )
+      const state = events
+        .filter(event => projection.canHandle.includes(event.type))
+        .reduce(
+          (state, event) => projection.evolve(state, event),
+          result?.projections?.[projection.name] ?? projection.initialState(),
+        )
 
       if (state === null) {
         unsetUpdates[`projections.${projection.name}`] = ''
@@ -128,8 +130,23 @@ async function processStreamInTransaction<
 export function createEventStore<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined>(
   options: EventStoreOptions<TProjections>,
 ): EventStoreInstance<TProjections> {
-  const mongoClient = new MongoClientWrapper({ connectionString: options.connectionString })
-  const projections = options.projections || ([] as unknown as TProjections)
+  const { projections: configuredProjections, ...mongoClientOptions } = options
+  const mongoClient = new MongoClientWrapper(mongoClientOptions)
+  const projections = configuredProjections || ([] as unknown as TProjections)
+
+  // Index creation is not allowed inside a transaction, so the unique index on
+  // streamSubject is ensured (once per collection) before appends start.
+  const ensuredIndexes = new Map<string, Promise<string>>()
+  function ensureStreamSubjectIndex(collection: Collection<any>): Promise<string> {
+    const key = collection.collectionName
+    let ensured = ensuredIndexes.get(key)
+    if (!ensured) {
+      ensured = collection.createIndex({ streamSubject: 1 }, { unique: true })
+      ensured.catch(() => ensuredIndexes.delete(key))
+      ensuredIndexes.set(key, ensured)
+    }
+    return ensured
+  }
 
   const eventStore: EventStoreInstance<TProjections> = {
     getInstanceMongoClientWrapper(): MongoClientWrapper {
@@ -210,6 +227,7 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
         const firstEntry = eventGroups.entries().next().value as [Subject, Array<TDomainEvent>]
         const [streamSubject, streamEvents] = firstEntry
         const collection = this.getCollectionBySubject<TDomainEvent>(streamSubject)
+        await ensureStreamSubjectIndex(collection)
 
         const client = mongoClient.getClient()
         const session = client.startSession()
@@ -237,6 +255,10 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
       }
 
       // Handle multiple streams with MongoDB transaction
+      for (const streamSubject of eventGroups.keys()) {
+        await ensureStreamSubjectIndex(this.getCollectionBySubject(streamSubject))
+      }
+
       const client = mongoClient.getClient()
       const session = client.startSession()
 

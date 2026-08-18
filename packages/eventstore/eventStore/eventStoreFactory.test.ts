@@ -115,6 +115,19 @@ describe('mongoClientWrapper Integration Tests', () => {
       expect(createDomainEvent(stream.events[1]!)).toMatchObject(newEvent)
     })
 
+    it('should ensure a unique index on streamSubject', async () => {
+      const testeventStore = createEventStore({ connectionString })
+      await testeventStore.getInstanceMongoClientWrapper().waitForConnection()
+
+      await testeventStore.appendOrCreateStream([testEvent])
+
+      const collection = testeventStore.getCollectionBySubject(streamSubject)
+      const indexes = await collection.indexes()
+      expect(indexes).toContainEqual(
+        expect.objectContaining({ key: { streamSubject: 1 }, unique: true }),
+      )
+    })
+
     it('should store a projection when configured', async () => {
       const projectionDefinition = createProjectionDefinition({
         name: 'TestProjection',
@@ -130,6 +143,31 @@ describe('mongoClientWrapper Integration Tests', () => {
 
       const result = await testeventStore.appendOrCreateStream([testEvent])
 
+      expect(result.streams[0]?.projections?.TestProjection).toEqual({ count: 1 })
+    })
+    it('should only pass events listed in canHandle to evolve', async () => {
+      const seenEventTypes: string[] = []
+      const projectionDefinition = createProjectionDefinition({
+        name: 'TestProjection',
+        canHandle: ['user.created'],
+        evolve: (state: { count: number } | null, event) => {
+          seenEventTypes.push(event.type)
+          return { count: (state?.count ?? 0) + 1 }
+        },
+        initialState: () => ({ count: 0 }),
+      })
+
+      const testeventStore = createEventStore({ connectionString, projections: [projectionDefinition] })
+      await testeventStore.getInstanceMongoClientWrapper().waitForConnection()
+
+      const unrelatedEvent = createDomainEvent({
+        type: 'user.updated',
+        subject: subjectExisting,
+        data: { name: 'Alice Updated' },
+      })
+      const result = await testeventStore.appendOrCreateStream([testEvent, unrelatedEvent])
+
+      expect(seenEventTypes).toEqual(['user.created'])
       expect(result.streams[0]?.projections?.TestProjection).toEqual({ count: 1 })
     })
     it('should update an already existing projection', async () => {

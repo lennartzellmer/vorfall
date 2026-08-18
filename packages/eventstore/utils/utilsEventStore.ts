@@ -58,8 +58,7 @@ export function createDomainEvent<
     id: randomUUID(),
     source: 'vorfall.eventsourcing.system',
     specversion: '1.0',
-    version: '1.0',
-    date: new Date(),
+    time: new Date().toISOString(),
     datacontenttype: 'application/json',
   } as const
 
