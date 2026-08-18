@@ -17,8 +17,8 @@ describe('createDomainCloudEvent', () => {
     expect(event.subject).toBe('user/123/created')
     expect(event.data).toEqual({ name: 'John Doe' })
     expect(event.datacontenttype).toBe('application/json')
-    expect(event.version).toBe('1.0')
-    expect(event.date).toBeInstanceOf(Date)
+    expect(event.time).toBeDefined()
+    expect(new Date(event.time!).getTime()).not.toBeNaN()
   })
 })
 
