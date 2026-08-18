@@ -1,5 +1,6 @@
 export * from './commandHandling/handleCommand'
 export * from './commandHandling/utilsCommand'
+export * from './eventStore/concurrencyError'
 export * from './eventStore/eventStoreFactory'
 export * from './eventStore/eventStoreFactory.types'
 export * from './mongoClient/mongoClientWrapper.types'

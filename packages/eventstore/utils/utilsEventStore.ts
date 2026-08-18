@@ -91,6 +91,7 @@ export function createEventStream<TDomainEvent extends AnyDomainEvent>(
     streamId: randomUUID(),
     streamSubject,
     events,
+    version: events.length,
     metadata: {
       createdAt: new Date(),
       updatedAt: new Date(),

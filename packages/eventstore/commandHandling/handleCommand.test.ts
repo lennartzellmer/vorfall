@@ -37,7 +37,7 @@ describe('handleCommand', () => {
       streamSubjects: [streamSubject],
     }
 
-    mockEventStore.aggregateStream.mockResolvedValue(mockedAggregatedState)
+    mockEventStore.aggregateStream.mockResolvedValue({ state: mockedAggregatedState, streamExists: true, version: 3 })
     mockEventStore.appendOrCreateStream.mockResolvedValue(mockedNewState)
 
     type IncrementCounterCommand = Command<'IncrementCounter', { incrementBy: number }>
@@ -71,7 +71,10 @@ describe('handleCommand', () => {
       initialState,
     })
     expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementCounterCommand, states: new Map([[streamSubject, mockedAggregatedState]]) })
-    expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith([counterIncrementedEvent])
+    expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith(
+      [counterIncrementedEvent],
+      { expectedVersions: new Map([[streamSubject, 3]]) },
+    )
     expect(result).toBe(mockedNewState)
   })
 
@@ -104,7 +107,7 @@ describe('handleCommand', () => {
       streamSubjects: [streamSubject],
     }
 
-    mockEventStore.aggregateStream.mockResolvedValue(mockedAggregatedState)
+    mockEventStore.aggregateStream.mockResolvedValue({ state: mockedAggregatedState, streamExists: true, version: 1 })
     mockEventStore.appendOrCreateStream.mockResolvedValue(mockedNewState)
 
     type IncrementCounterCommand = Command<'IncrementCounter', { incrementBy: number }>
@@ -143,7 +146,10 @@ describe('handleCommand', () => {
       initialState,
     })
     expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementCounterCommand, states: new Map([[streamSubject, mockedAggregatedState]]) })
-    expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith([counterIncrementedEvent])
+    expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith(
+      [counterIncrementedEvent],
+      { expectedVersions: new Map([[streamSubject, 1]]) },
+    )
     expect(result).toBe(mockedNewState)
   })
 
@@ -186,7 +192,7 @@ describe('handleCommand', () => {
       streamSubjects: [streamSubject],
     }
 
-    mockEventStore.aggregateStream.mockResolvedValue(mockedAggregatedState)
+    mockEventStore.aggregateStream.mockResolvedValue({ state: mockedAggregatedState, streamExists: true, version: 1 })
     mockEventStore.appendOrCreateStream.mockResolvedValue(mockedNewState)
 
     type IncrementTwiceCommand = Command<'IncrementTwice', { incrementBy: number }>
@@ -231,7 +237,10 @@ describe('handleCommand', () => {
       initialState,
     })
     expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementTwiceCommand, states: new Map([[streamSubject, mockedAggregatedState]]) })
-    expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith([counterIncrementedEvent1, counterIncrementedEvent2])
+    expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith(
+      [counterIncrementedEvent1, counterIncrementedEvent2],
+      { expectedVersions: new Map([[streamSubject, 1]]) },
+    )
     expect(result).toBe(mockedNewState)
   })
 
@@ -309,10 +318,10 @@ describe('handleCommand', () => {
     mockEventStore.aggregateStream
       .mockImplementation(async (streamSubject: string) => {
         if (streamSubject === userStreamSubject) {
-          return mockedUserState
+          return { state: mockedUserState, streamExists: false, version: 0 }
         }
         if (streamSubject === emailListStreamSubject) {
-          return mockedEmailListState
+          return { state: mockedEmailListState, streamExists: true, version: 5 }
         }
         throw new Error(`Unexpected stream subject: ${streamSubject}`)
       })
@@ -415,6 +424,12 @@ describe('handleCommand', () => {
           data: { userId: '123' },
         }),
       ]),
+      {
+        expectedVersions: new Map<string, number>([
+          [userStreamSubject, 0],
+          [emailListStreamSubject, 5],
+        ]),
+      },
     )
 
     expect(result).toBe(mockedNewState)

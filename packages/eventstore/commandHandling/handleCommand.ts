@@ -1,3 +1,4 @@
+import type { ExpectedStreamVersion } from '../eventStore/concurrencyError'
 import type { MultiStreamAppendResult } from '../eventStore/eventStoreFactory.types'
 import type { Subject } from '../types/domainEvent.types'
 import type { CommandHandlerOptions, DefaultRecord, InferDomainEventFromCommandHandler, StreamConfig } from './handleCommand.types'
@@ -20,15 +21,19 @@ export async function handleCommand<
 
   /**
    * Aggregate the state of the streams
-   * using the provided evolve functions and initial states
+   * using the provided evolve functions and initial states.
+   * The version seen at read time is remembered per stream so the append
+   * below fails with a ConcurrencyError if a stream changed in between.
    */
   const aggregatedStreamStates: Map<Subject, any> = new Map()
+  const expectedVersions: Map<Subject, ExpectedStreamVersion> = new Map()
   for (const stream of streams) {
-    const aggregatedStreamState = await eventStore.aggregateStream<any, InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(stream.streamSubject, {
+    const { state, version } = await eventStore.aggregateStream<any, InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(stream.streamSubject, {
       evolve: stream.evolve,
       initialState: stream.initialState,
     })
-    aggregatedStreamStates.set(stream.streamSubject, aggregatedStreamState)
+    aggregatedStreamStates.set(stream.streamSubject, state)
+    expectedVersions.set(stream.streamSubject, version)
   }
 
   /**
@@ -40,6 +45,7 @@ export async function handleCommand<
 
   const newState = await eventStore.appendOrCreateStream<InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(
     eventsToAppend,
+    { expectedVersions },
   )
 
   return newState

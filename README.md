@@ -109,15 +109,43 @@ async function getUserProfile(userId: string) {
 
 // Or rebuild state directly from the events
 async function getUserState(userId: string) {
-  return eventStore.aggregateStream<UserProfile | null, UserEvent>(
+  const { state, version, streamExists } = await eventStore.aggregateStream<UserProfile | null, UserEvent>(
     createSubject(`user/${userId}`),
     {
       initialState: () => null,
       evolve: (state, event) => userProfileProjection.evolve(state, event),
     },
   )
+  return state
 }
 ```
+
+## Optimistic Concurrency Control
+
+Every stream document carries a `version` (the number of events in the stream). `aggregateStream` and `getEventStreamBySubject` return the version seen at read time; pass it back on append to make the write fail if the stream changed in between:
+
+```typescript
+import { ConcurrencyError } from 'vorfall'
+
+const { state, version } = await eventStore.aggregateStream(streamSubject, { evolve, initialState })
+
+try {
+  await eventStore.appendOrCreateStream([event], {
+    expectedVersions: new Map([[streamSubject, version]]),
+  })
+}
+catch (error) {
+  if (error instanceof ConcurrencyError) {
+    // Someone else appended first: error.expectedVersion vs. error.actualVersion.
+    // Re-read, re-decide, retry — or surface e.g. HTTP 409.
+  }
+  throw error
+}
+```
+
+Expected versions per stream subject can be a number (exact event count, `0` means the stream must not exist yet), `'no-stream'` (append must create the stream) or `'any'` (no check — the default for streams not listed). On a mismatch the whole append is rolled back, including all other streams in the same call.
+
+`handleCommand` wires this automatically: the versions observed while aggregating the configured streams are enforced on append, so a concurrent command on the same stream fails with a `ConcurrencyError` instead of silently interleaving.
 
 ## Installation
 
