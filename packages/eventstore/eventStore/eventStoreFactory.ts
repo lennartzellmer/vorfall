@@ -86,10 +86,12 @@ async function processStreamInTransaction<
     const setUpdates: Record<string, any> = {}
     const unsetUpdates: Record<string, any> = {}
     for (const projection of applicableProjections) {
-      const state = events.reduce(
-        (state, event) => projection.evolve(state, event),
-        result?.projections?.[projection.name] ?? projection.initialState(),
-      )
+      const state = events
+        .filter(event => projection.canHandle.includes(event.type))
+        .reduce(
+          (state, event) => projection.evolve(state, event),
+          result?.projections?.[projection.name] ?? projection.initialState(),
+        )
 
       if (state === null) {
         unsetUpdates[`projections.${projection.name}`] = ''

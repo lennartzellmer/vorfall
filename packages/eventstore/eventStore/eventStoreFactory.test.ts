@@ -132,6 +132,31 @@ describe('mongoClientWrapper Integration Tests', () => {
 
       expect(result.streams[0]?.projections?.TestProjection).toEqual({ count: 1 })
     })
+    it('should only pass events listed in canHandle to evolve', async () => {
+      const seenEventTypes: string[] = []
+      const projectionDefinition = createProjectionDefinition({
+        name: 'TestProjection',
+        canHandle: ['user.created'],
+        evolve: (state: { count: number } | null, event) => {
+          seenEventTypes.push(event.type)
+          return { count: (state?.count ?? 0) + 1 }
+        },
+        initialState: () => ({ count: 0 }),
+      })
+
+      const testeventStore = createEventStore({ connectionString, projections: [projectionDefinition] })
+      await testeventStore.getInstanceMongoClientWrapper().waitForConnection()
+
+      const unrelatedEvent = createDomainEvent({
+        type: 'user.updated',
+        subject: subjectExisting,
+        data: { name: 'Alice Updated' },
+      })
+      const result = await testeventStore.appendOrCreateStream([testEvent, unrelatedEvent])
+
+      expect(seenEventTypes).toEqual(['user.created'])
+      expect(result.streams[0]?.projections?.TestProjection).toEqual({ count: 1 })
+    })
     it('should update an already existing projection', async () => {
       const projectionDefinition = createProjectionDefinition({
         name: 'TestProjection',
