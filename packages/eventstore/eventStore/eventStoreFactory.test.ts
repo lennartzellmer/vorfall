@@ -115,6 +115,19 @@ describe('mongoClientWrapper Integration Tests', () => {
       expect(createDomainEvent(stream.events[1]!)).toMatchObject(newEvent)
     })
 
+    it('should ensure a unique index on streamSubject', async () => {
+      const testeventStore = createEventStore({ connectionString })
+      await testeventStore.getInstanceMongoClientWrapper().waitForConnection()
+
+      await testeventStore.appendOrCreateStream([testEvent])
+
+      const collection = testeventStore.getCollectionBySubject(streamSubject)
+      const indexes = await collection.indexes()
+      expect(indexes).toContainEqual(
+        expect.objectContaining({ key: { streamSubject: 1 }, unique: true }),
+      )
+    })
+
     it('should store a projection when configured', async () => {
       const projectionDefinition = createProjectionDefinition({
         name: 'TestProjection',
