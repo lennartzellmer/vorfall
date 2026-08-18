@@ -192,6 +192,26 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
   const mongoClient = new MongoClientWrapper(mongoClientOptions)
   const projections = configuredProjections || ([] as unknown as TProjections)
 
+  // Replica set elections interrupt the majority write concern of otherwise
+  // successful writes (e.g. InterruptedDueToReplStateChange). The ensure
+  // operations are idempotent, so retrying on stepdown-related codes is safe.
+  const TRANSIENT_WRITE_CODES = new Set([11602, 91, 189, 10107])
+  async function retryTransient<T>(op: () => Promise<T>): Promise<T> {
+    let lastError: unknown
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await op()
+      }
+      catch (error) {
+        if (!(error instanceof MongoServerError) || !TRANSIENT_WRITE_CODES.has(Number(error.code))) {
+          throw error
+        }
+        lastError = error
+      }
+    }
+    throw lastError
+  }
+
   // Index creation is not allowed inside a transaction, so the unique index on
   // streamSubject is ensured (once per collection) before appends start. The
   // same step backfills the version field on documents written before
@@ -203,11 +223,11 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
     let ensured = ensuredCollections.get(key)
     if (!ensured) {
       ensured = Promise.all([
-        collection.createIndex({ streamSubject: 1 }, { unique: true }),
-        collection.updateMany(
+        retryTransient(() => collection.createIndex({ streamSubject: 1 }, { unique: true })),
+        retryTransient(() => collection.updateMany(
           { version: { $exists: false } },
           [{ $set: { version: { $size: '$events' } } }],
-        ),
+        )),
       ])
       ensured.catch(() => ensuredCollections.delete(key))
       ensuredCollections.set(key, ensured)
