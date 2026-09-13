@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { MongoServerError } from 'mongodb'
 import { MongoClientWrapper } from '../mongoClient/mongoClientWrapper'
 import { createEventStream, groupEventsByStreamSubject } from '../utils/utilsEventStore'
+import { selectEventsForProjection } from '../utils/utilsProjections'
 import { getCollectionNameFromSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject'
 import { ConcurrencyError, MissingExpectedVersionError } from './concurrencyError'
 
@@ -128,20 +129,18 @@ async function processStreamInTransaction<
   }
 
   if (projections && projections.length > 0) {
-    const eventTypes = events.map(event => event.type)
-    const applicableProjections = projections.filter(p =>
-      p.canHandle.some(type => eventTypes.includes(type)),
-    )
-
     const setUpdates: Record<string, any> = {}
     const unsetUpdates: Record<string, any> = {}
-    for (const projection of applicableProjections) {
-      const state = events
-        .filter(event => projection.canHandle.includes(event.type))
-        .reduce(
-          (state, event) => projection.evolve(state, event),
-          result?.projections?.[projection.name] ?? projection.initialState(),
-        )
+    for (const projection of projections) {
+      const handledEvents = selectEventsForProjection(projection, streamSubject, events)
+      if (handledEvents.length === 0) {
+        continue
+      }
+
+      const state = handledEvents.reduce(
+        (state, event) => projection.evolve(state, event),
+        result?.projections?.[projection.name] ?? projection.initialState(),
+      )
 
       if (state === null) {
         unsetUpdates[`projections.${projection.name}`] = ''
@@ -158,16 +157,21 @@ async function processStreamInTransaction<
     if (Object.keys(unsetUpdates).length > 0) {
       projectionUpdates.$unset = unsetUpdates
     }
-    result = await collection.findOneAndUpdate(
-      { streamSubject },
-      projectionUpdates,
-      {
-        useBigInt64: true,
-        ignoreUndefined: true,
-        returnDocument: 'after',
-        ...(session && { session }),
-      },
-    )
+
+    // MongoDB rejects an update without operators, so an append that no
+    // configured projection folds leaves the document as written above.
+    if (Object.keys(projectionUpdates).length > 0) {
+      result = await collection.findOneAndUpdate(
+        { streamSubject },
+        projectionUpdates,
+        {
+          useBigInt64: true,
+          ignoreUndefined: true,
+          returnDocument: 'after',
+          ...(session && { session }),
+        },
+      )
+    }
   }
 
   if (!result) {

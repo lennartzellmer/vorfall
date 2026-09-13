@@ -4,7 +4,7 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createEventStore } from '../eventStore/eventStoreFactory'
 import { createDomainEvent } from './utilsEventStore'
-import { countProjections, createProjectionDefinition, findMultipleProjections, findOneProjection } from './utilsProjections'
+import { countProjections, createProjectionDefinition, findMultipleProjections, findOneProjection, selectEventsForProjection } from './utilsProjections'
 import { createSubject, getStreamSubjectFromSubject } from './utilsSubject'
 
 describe('createProjectionDefinition', () => {
@@ -36,6 +36,48 @@ describe('createProjectionDefinition', () => {
     expect(projectionDefinition.canHandle).toEqual(['test.eventOne', 'test.eventTwo'])
     expect(projectionDefinition.evolve).toBeDefined()
     expect(projectionDefinition.initialState).toBeDefined()
+  })
+
+  it('should create a projection selected by entity instead of event types', () => {
+    type TestEvent = DomainEvent<'test.eventOne', { value: string }, undefined>
+
+    const projectionDefinition = createProjectionDefinition({
+      name: 'testProjection',
+      entity: 'test',
+      evolve: (state: { value: string } | null, event: TestEvent) => ({ value: event.data.value }),
+      initialState: () => ({ value: '' }),
+    })
+
+    expect(projectionDefinition.entity).toBe('test')
+    expect(projectionDefinition.canHandle).toBeUndefined()
+  })
+})
+
+describe('selectEventsForProjection', () => {
+  const userSubject = createSubject('user/1')
+  const orderSubject = createSubject('order/1')
+  const created = createDomainEvent({ type: 'user.created', subject: userSubject, data: { name: 'A' } })
+  const renamed = createDomainEvent({ type: 'user.renamed', subject: userSubject, data: { name: 'B' } })
+  const evolve = (state: { count: number } | null) => ({ count: (state?.count ?? 0) + 1 })
+  const initialState = () => ({ count: 0 })
+
+  it('should select every event of a stream that belongs to the projection entity', () => {
+    const projection = createProjectionDefinition({ name: 'users', entity: 'user', evolve, initialState })
+
+    expect(selectEventsForProjection(projection, userSubject, [created, renamed])).toEqual([created, renamed])
+  })
+
+  it('should select nothing from a stream of another entity', () => {
+    const projection = createProjectionDefinition({ name: 'orders', entity: 'order', evolve, initialState })
+
+    expect(selectEventsForProjection(projection, userSubject, [created, renamed])).toEqual([])
+    expect(selectEventsForProjection(projection, orderSubject, [])).toEqual([])
+  })
+
+  it('should select only the listed event types for a canHandle projection', () => {
+    const projection = createProjectionDefinition({ name: 'renames', canHandle: ['user.renamed'], evolve, initialState })
+
+    expect(selectEventsForProjection(projection, userSubject, [created, renamed])).toEqual([renamed])
   })
 })
 

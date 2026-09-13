@@ -15,7 +15,11 @@ import { transformFilterForNestedPath } from './utilsMongoFilter'
  * Creates a projection definition for handling events and evolving state in a type safe manner.
  * @param config - The configuration for the projection definition
  * @param config.name - The name of the projection
- * @param config.canHandle - Function to determine if the projection can handle a specific event
+ * @param config.canHandle - The event types the projection folds, from any stream carrying them.
+ * Use this for projections that observe a chosen subset of events.
+ * @param config.entity - The entity whose streams the projection folds completely: every event of
+ * every stream under `<entity>/`. Use this for aggregate projections, whose `evolve` handles all
+ * events of its own stream; there is no event type list that could drift from `evolve`.
  * @param config.evolve - Function to evolve the state based on an event
  * @param config.initialState - Function to create the initial state
  * @returns A projection definition object
@@ -28,16 +32,36 @@ export function createProjectionDefinition<
   TEvent extends AnyDomainEvent,
 >(config: {
   name: TName
-  canHandle: CanHandle<TEvent>
   evolve: (state: TState | null, event: TEvent) => TState | null
   initialState: () => TState | null
-}): ProjectionDefinition<TState, TName, TEvent> {
-  return {
-    name: config.name,
-    canHandle: config.canHandle,
-    evolve: config.evolve,
-    initialState: config.initialState,
-  } as const
+} & ({ canHandle: CanHandle<TEvent> } | { entity: string })): ProjectionDefinition<TState, TName, TEvent> {
+  const { name, evolve, initialState } = config
+
+  if ('entity' in config) {
+    return { name, evolve, initialState, entity: config.entity }
+  }
+  return { name, evolve, initialState, canHandle: config.canHandle }
+}
+
+/**
+ * The events of one append that a projection folds: all of them when the
+ * stream belongs to the projection's entity, the ones whose type is listed in
+ * `canHandle` otherwise. An empty result means the projection does not apply
+ * to this append.
+ * @param projection - The projection definition
+ * @param streamSubject - The subject of the stream being appended to
+ * @param events - The events being appended to that stream
+ * @returns The events the projection folds, in append order
+ */
+export function selectEventsForProjection<TDomainEvent extends AnyDomainEvent>(
+  projection: AnyProjectionDefinition,
+  streamSubject: Subject,
+  events: readonly TDomainEvent[],
+): TDomainEvent[] {
+  if (projection.entity !== undefined) {
+    return streamSubject.startsWith(`${projection.entity}/`) ? [...events] : []
+  }
+  return events.filter(event => projection.canHandle.includes(event.type))
 }
 
 /**

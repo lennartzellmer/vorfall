@@ -151,6 +151,8 @@ Checking is the default: `expectedVersions` is required, and when it is a map, e
 
 `handleCommand` wires this automatically: the versions observed while aggregating the configured streams are enforced on append, so a concurrent command on the same stream fails with a `ConcurrencyError` instead of silently interleaving.
 
+The `states` map handed to the command handler contains one entry per listed stream, with the initial state for streams that do not exist yet. Reading a subject that was not listed throws a `StreamNotLoadedError`, so a wiring mistake in the caller is not mistaken for a missing stream.
+
 ## Installation
 
 ```bash
@@ -171,6 +173,35 @@ yarn add vorfall
 - **Event Store** - One document per stream, holding its events and projection states (`createEventStore`, `appendOrCreateStream`, `getEventStreamBySubject`, `aggregateStream`)
 - **Projections** - Read models folded from events and persisted on the stream document on every append (`createProjectionDefinition`, `findOneProjection`, `findMultipleProjections`, `countProjections`)
 - **Commands** - Operations that may produce events (`createCommand`, `handleCommand`)
+
+## Aggregates
+
+`defineAggregate` derives everything one aggregate needs from a single `evolve`/`initialState` pair: the stream subject, the `streams` entry for `handleCommand` and the projection definition for `createEventStore`.
+
+```typescript
+import { defineAggregate } from 'vorfall'
+
+const user = defineAggregate({
+  name: 'user',
+  evolve: (state: UserProfile | null, event: UserEvent): UserProfile | null => { /* ... */ },
+  initialState: () => null,
+})
+
+user.subject('123') // 'user/123'
+user.stream('123') // { evolve, initialState, streamSubject: 'user/123' } for handleCommand
+user.projection // for createEventStore({ projections: [user.projection] })
+```
+
+The aggregate's projection is selected by entity, not by event type: it folds every event of every stream under `user/`. `evolve` is therefore the only place that lists the aggregate's event types, and an exhaustive `switch` in it is all the completeness check you need. A projection selected by `canHandle` remains the right tool when it deliberately observes a subset of events, possibly across entities:
+
+```typescript
+const registrations = createProjectionDefinition({
+  name: 'registrations',
+  canHandle: ['user.registered'],
+  evolve: (state: { count: number } | null) => ({ count: (state?.count ?? 0) + 1 }),
+  initialState: () => ({ count: 0 }),
+})
+```
 
 ## CQRS Pattern Support
 

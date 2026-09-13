@@ -1,4 +1,4 @@
-import type { DomainEvent } from '../types/index'
+import type { DomainEvent, Subject } from '../types/index'
 import type { EventStoreInstance } from './eventStoreFactory'
 import { CloudEvent } from 'cloudevents'
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
@@ -171,6 +171,46 @@ describe('mongoClientWrapper Integration Tests', () => {
 
       expect(seenEventTypes).toEqual(['user.created'])
       expect(result.streams[0]?.projections?.TestProjection).toEqual({ count: 1 })
+    })
+    it('should pass every event of the stream to a projection selected by entity', async () => {
+      const seenEventTypes: string[] = []
+      const projectionDefinition = createProjectionDefinition({
+        name: 'TestProjection',
+        entity: 'user',
+        evolve: (state: { count: number } | null, event) => {
+          seenEventTypes.push(event.type)
+          return { count: (state?.count ?? 0) + 1 }
+        },
+        initialState: () => ({ count: 0 }),
+      })
+
+      const testeventStore = createEventStore({ connectionString, projections: [projectionDefinition] })
+      await testeventStore.getInstanceMongoClientWrapper().waitForConnection()
+
+      const updatedEvent = createDomainEvent({
+        type: 'user.updated',
+        subject: subjectExisting,
+        data: { name: 'Alice Updated' },
+      })
+      const result = await testeventStore.appendOrCreateStream([testEvent, updatedEvent], { expectedVersions: 'any' })
+
+      expect(seenEventTypes).toEqual(['user.created', 'user.updated'])
+      expect(result.streams[0]?.projections?.TestProjection).toEqual({ count: 2 })
+    })
+    it('should not apply a projection selected by entity to streams of another entity', async () => {
+      const projectionDefinition = createProjectionDefinition({
+        name: 'TestProjection',
+        entity: 'order',
+        evolve: (state: { count: number } | null) => ({ count: (state?.count ?? 0) + 1 }),
+        initialState: () => ({ count: 0 }),
+      })
+
+      const testeventStore = createEventStore({ connectionString, projections: [projectionDefinition] })
+      await testeventStore.getInstanceMongoClientWrapper().waitForConnection()
+
+      const result = await testeventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
+
+      expect(result.streams[0]?.projections?.TestProjection).toBeUndefined()
     })
     it('should update an already existing projection', async () => {
       const projectionDefinition = createProjectionDefinition({
@@ -483,7 +523,7 @@ describe('mongoClientWrapper Integration Tests', () => {
       await eventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
 
       const append = eventStore.appendOrCreateStream([testEvent, otherEvent], {
-        expectedVersions: new Map<typeof streamSubject, number>([
+        expectedVersions: new Map<Subject, number>([
           [streamSubject, 1],
           [otherStreamSubject, 7],
         ]),

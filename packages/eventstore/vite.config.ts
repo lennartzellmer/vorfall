@@ -6,9 +6,8 @@ export default defineConfig({
   plugins: [
     dts({
       insertTypesEntry: true,
-      outDir: 'dist',
+      outDirs: ['dist'],
       exclude: ['**/*.test.ts', 'vite.config.ts'],
-      rollupTypes: true,
     }),
   ],
   build: {

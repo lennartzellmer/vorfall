@@ -1,8 +1,36 @@
 import type { ExpectedStreamVersion } from '../eventStore/concurrencyError'
 import type { MultiStreamAppendResult } from '../eventStore/eventStoreFactory.types'
 import type { AnyDomainEvent, Subject } from '../types/domainEvent.types'
-import type { CommandHandlerOptions, CreateStatesMap, DefaultRecord, StreamConfig } from './handleCommand.types'
+import type { DefaultRecord } from '../types/index'
+import type { CommandHandlerOptions, CreateStatesMap, StreamConfig } from './handleCommand.types'
 import { getStreamSubjectFromSubject } from '../utils/utilsSubject'
+
+/**
+ * Thrown when a command handler reads a stream state that was not listed in
+ * `streams`. Without this guard the missing entry would look exactly like a
+ * stream that does not exist yet, and a wiring mistake in the caller would be
+ * reported as a domain-level "not found".
+ */
+export class StreamNotLoadedError extends Error {
+  constructor(subject: Subject) {
+    super(`Stream "${subject}" was read by the command handler but is not listed in streams`)
+    this.name = 'StreamNotLoadedError'
+  }
+}
+
+/**
+ * Every listed stream has an entry, even if the stream does not exist yet
+ * (its value is then the initial state). A missing key can therefore only
+ * mean that the stream was never listed.
+ */
+class LoadedStreamStates extends Map<Subject, any> {
+  override get(subject: Subject): any {
+    if (!this.has(subject)) {
+      throw new StreamNotLoadedError(subject)
+    }
+    return super.get(subject)
+  }
+}
 
 export async function handleCommand<
   Streams extends ReadonlyArray<StreamConfig<any, any>>,
@@ -27,9 +55,9 @@ export async function handleCommand<
    * below fails with a ConcurrencyError if a stream changed in between.
    */
   // CreateStatesMap adds a type-level view of the per-subject states onto the
-  // Map; at runtime it is a plain Map, so the assertion is the only way to
-  // construct it.
-  const aggregatedStreamStates = new Map<Subject, any>() as CreateStatesMap<Streams>
+  // Map; at runtime it is a LoadedStreamStates Map, so the assertion is the
+  // only way to construct it.
+  const aggregatedStreamStates = new LoadedStreamStates() as CreateStatesMap<Streams>
   const expectedVersions: Map<Subject, ExpectedStreamVersion> = new Map()
   for (const stream of streams) {
     const { state, version } = await eventStore.aggregateStream<any, TDomainEvent>(stream.streamSubject, {
