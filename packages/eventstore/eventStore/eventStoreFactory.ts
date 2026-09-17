@@ -1,4 +1,4 @@
-import type { ClientSession, Collection, Filter, OptionalUnlessRequiredId, PushOperator, UpdateFilter } from 'mongodb'
+import type { ClientSession, Collection, Filter, PushOperator, UpdateFilter } from 'mongodb'
 import type { AnyDomainEvent, Subject } from '../types/index'
 import type { ProjectionDefinition } from '../utils/utilsProjections.types'
 import type { ExpectedStreamVersion } from './concurrencyError'
@@ -58,10 +58,12 @@ async function processStreamInTransaction<
   let result: EventStream<TDomainEvent, TProjections> | null
 
   if (expectedVersion === 'no-stream' || expectedVersion === 0) {
-    const newStream = createEventStream(events) as OptionalUnlessRequiredId<EventStream<TDomainEvent, TProjections>>
+    const newStream = createEventStream<TDomainEvent, TProjections>(events)
 
     try {
-      await collection.insertOne(newStream, {
+      // Insert a copy: the driver mutates the given document with the
+      // generated _id, which must not leak into the returned stream.
+      await collection.insertOne({ ...newStream }, {
         ignoreUndefined: true,
         ...(session && { session }),
       })
@@ -76,8 +78,7 @@ async function processStreamInTransaction<
       throw error
     }
 
-    delete (newStream as { _id?: unknown })._id
-    result = newStream as EventStream<TDomainEvent, TProjections>
+    result = newStream
   }
   else {
     const versionFilter: Filter<EventStream<TDomainEvent, TProjections>>
