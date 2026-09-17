@@ -87,14 +87,15 @@ export function createEventStream<TDomainEvent extends AnyDomainEvent>(
 
   const streamSubject = getStreamSubjectFromSubject(subject)
 
+  const now = new Date()
   return {
     streamId: randomUUID(),
     streamSubject,
     events,
     version: events.length,
     metadata: {
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
     },
     projections: undefined,
   }

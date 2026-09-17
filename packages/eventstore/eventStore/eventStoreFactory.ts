@@ -6,7 +6,7 @@ import type { AggregateStreamResult, AppendStreamOptions, EventStoreOptions, Eve
 import { randomUUID } from 'node:crypto'
 import { MongoServerError } from 'mongodb'
 import { MongoClientWrapper } from '../mongoClient/mongoClientWrapper'
-import { groupEventsByStreamSubject } from '../utils/utilsEventStore'
+import { createEventStream, groupEventsByStreamSubject } from '../utils/utilsEventStore'
 import { getCollectionNameFromSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject'
 import { ConcurrencyError } from './concurrencyError'
 
@@ -58,16 +58,7 @@ async function processStreamInTransaction<
   let result: EventStream<TDomainEvent, TProjections> | null
 
   if (expectedVersion === 'no-stream' || expectedVersion === 0) {
-    const newStream = {
-      streamId: randomUUID(),
-      streamSubject,
-      events,
-      version: events.length,
-      metadata: {
-        createdAt: now,
-        updatedAt: now,
-      },
-    } as OptionalUnlessRequiredId<EventStream<TDomainEvent, TProjections>>
+    const newStream = createEventStream(events) as OptionalUnlessRequiredId<EventStream<TDomainEvent, TProjections>>
 
     try {
       await collection.insertOne(newStream, {
