@@ -8,7 +8,7 @@ import { MongoServerError } from 'mongodb'
 import { MongoClientWrapper } from '../mongoClient/mongoClientWrapper'
 import { createEventStream, groupEventsByStreamSubject } from '../utils/utilsEventStore'
 import { getCollectionNameFromSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject'
-import { ConcurrencyError } from './concurrencyError'
+import { ConcurrencyError, MissingExpectedVersionError } from './concurrencyError'
 
 export interface EventStoreInstance<
   TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
@@ -35,7 +35,7 @@ export interface EventStoreInstance<
   ) => Promise<AggregateStreamResult<State>>
   appendOrCreateStream: <TDomainEvent extends AnyDomainEvent>(
     events: Array<TDomainEvent>,
-    options?: AppendStreamOptions,
+    options: AppendStreamOptions,
   ) => Promise<MultiStreamAppendResult<TDomainEvent, TProjections>>
 }
 
@@ -283,13 +283,26 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
 
     async appendOrCreateStream<TDomainEvent extends AnyDomainEvent>(
       events: Array<TDomainEvent>,
-      options?: AppendStreamOptions,
+      options: AppendStreamOptions,
     ): Promise<MultiStreamAppendResult<TDomainEvent, TProjections>> {
       if (!events || events.length === 0) {
         throw new Error('Cannot process an empty array of events')
       }
 
       const eventGroups = groupEventsByStreamSubject(events)
+
+      // Opting out of the concurrency check is explicit: a map must cover
+      // every stream in the append, so a forgotten stream fails loudly here
+      // instead of silently appending unchecked.
+      const { expectedVersions } = options
+      const resolvedVersions = new Map<Subject, ExpectedStreamVersion>()
+      for (const streamSubject of eventGroups.keys()) {
+        const expected = expectedVersions === 'any' ? 'any' : expectedVersions.get(streamSubject)
+        if (expected === undefined) {
+          throw new MissingExpectedVersionError(streamSubject)
+        }
+        resolvedVersions.set(streamSubject, expected)
+      }
 
       for (const streamSubject of eventGroups.keys()) {
         await ensureCollectionReady(this.getCollectionBySubject(streamSubject))
@@ -309,7 +322,7 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
               streamEvents,
               collection,
               projections,
-              options?.expectedVersions?.get(streamSubject) ?? 'any',
+              resolvedVersions.get(streamSubject)!,
               session,
             )
             streamResults.push(result)

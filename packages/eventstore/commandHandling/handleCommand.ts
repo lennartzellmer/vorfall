@@ -2,6 +2,7 @@ import type { ExpectedStreamVersion } from '../eventStore/concurrencyError'
 import type { MultiStreamAppendResult } from '../eventStore/eventStoreFactory.types'
 import type { Subject } from '../types/domainEvent.types'
 import type { CommandHandlerOptions, DefaultRecord, InferDomainEventFromCommandHandler, StreamConfig } from './handleCommand.types'
+import { getStreamSubjectFromSubject } from '../utils/utilsSubject'
 
 export async function handleCommand<
   Streams extends ReadonlyArray<StreamConfig<any, any>>,
@@ -42,6 +43,18 @@ export async function handleCommand<
    */
   const result = await commandHandlerFunction({ command, states: aggregatedStreamStates })
   const eventsToAppend = Array.isArray(result) ? result : [result]
+
+  /**
+   * Streams the handler emits to without having aggregated them carry no
+   * version claim: the decision was not based on their state, so there is
+   * no stale read to guard against.
+   */
+  for (const event of eventsToAppend) {
+    const streamSubject = getStreamSubjectFromSubject(event.subject)
+    if (!expectedVersions.has(streamSubject)) {
+      expectedVersions.set(streamSubject, 'any')
+    }
+  }
 
   const newState = await eventStore.appendOrCreateStream<InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(
     eventsToAppend,

@@ -88,7 +88,7 @@ describe('findSingleProjection', () => {
   })
 
   it('should find one projection by stream subject and projection name', async () => {
-    await eventStore.appendOrCreateStream([testEvent])
+    await eventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
 
     const streamFilter = {
       projectionName: 'testProjection',
@@ -108,7 +108,7 @@ describe('findSingleProjection', () => {
       data: { amount: 1 },
     })
 
-    await eventStore.appendOrCreateStream([testEvent1])
+    await eventStore.appendOrCreateStream([testEvent1], { expectedVersions: 'any' })
 
     const projectionQuery = {
       projectionName: 'testProjection',
@@ -133,7 +133,7 @@ describe('findSingleProjection', () => {
       data: { amount: 1 },
     })
 
-    await eventStore.appendOrCreateStream([testEvent1])
+    await eventStore.appendOrCreateStream([testEvent1], { expectedVersions: 'any' })
 
     const projectionQuery = {
       projectionName: 'testProjection',
@@ -207,10 +207,10 @@ describe('projection deletion via null evolve return', () => {
 
     await eventStore.appendOrCreateStream([
       createDomainEvent({ type: 'recepie.salt.added', subject: testSubject, data: { amount: 1 } }),
-    ])
+    ], { expectedVersions: 'any' })
     await eventStore.appendOrCreateStream([
       createDomainEvent({ type: 'recepie.salt.removed', subject: testSubject }),
-    ])
+    ], { expectedVersions: 'any' })
 
     const projection = await findOneProjection(eventStore, streamSubject, {
       projectionName: 'testProjection',
@@ -225,13 +225,13 @@ describe('projection deletion via null evolve return', () => {
 
     await eventStore.appendOrCreateStream([
       createDomainEvent({ type: 'recepie.salt.added', subject: keptSubject, data: { amount: 1 } }),
-    ])
+    ], { expectedVersions: 'any' })
     await eventStore.appendOrCreateStream([
       createDomainEvent({ type: 'recepie.salt.added', subject: deletedSubject, data: { amount: 1 } }),
-    ])
+    ], { expectedVersions: 'any' })
     await eventStore.appendOrCreateStream([
       createDomainEvent({ type: 'recepie.salt.removed', subject: deletedSubject }),
-    ])
+    ], { expectedVersions: 'any' })
 
     const streamFilter = { projectionName: 'testProjection' } as const
 
@@ -292,7 +292,7 @@ describe('findMultipleProjections', () => {
     await eventStore.getInstanceMongoClientWrapper().waitForConnection()
 
     for (const event of testEventsForEventStream) {
-      await eventStore.appendOrCreateStream([event])
+      await eventStore.appendOrCreateStream([event], { expectedVersions: 'any' })
     }
   })
 

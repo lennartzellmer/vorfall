@@ -8,6 +8,20 @@ import type { Subject } from '../types/index'
  */
 export type ExpectedStreamVersion = number | 'any' | 'no-stream'
 
+/**
+ * Thrown when an append passes an expectedVersions map that has no entry for
+ * one of the streams being appended to. Opting out of the concurrency check
+ * must be explicit: list the stream with 'any'.
+ */
+export class MissingExpectedVersionError extends Error {
+  constructor(public readonly streamSubject: Subject) {
+    super(
+      `No expected version given for stream "${streamSubject}". List it in expectedVersions — with 'any' to append without a concurrency check.`,
+    )
+    this.name = 'MissingExpectedVersionError'
+  }
+}
+
 export class ConcurrencyError extends Error {
   constructor(
     public readonly streamSubject: Subject,

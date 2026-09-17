@@ -94,7 +94,9 @@ async function registerUser(userId: string, email: string, name: string) {
     data: { userId, email, name },
   })
 
-  await eventStore.appendOrCreateStream([event])
+  // 'any' deliberately opts out of the concurrency check — see
+  // Optimistic Concurrency Control below.
+  await eventStore.appendOrCreateStream([event], { expectedVersions: 'any' })
 }
 
 // Query the projection maintained for a stream
@@ -143,7 +145,9 @@ catch (error) {
 }
 ```
 
-Expected versions per stream subject can be a number (exact event count, `0` means the stream must not exist yet), `'no-stream'` (append must create the stream) or `'any'` (no check — the default for streams not listed). On a mismatch the whole append is rolled back, including all other streams in the same call.
+Expected versions per stream subject can be a number (exact event count, `0` means the stream must not exist yet), `'no-stream'` (append must create the stream) or `'any'` (no check). On a mismatch the whole append is rolled back, including all other streams in the same call.
+
+Checking is the default: `expectedVersions` is required, and when it is a map, every stream in the append must be listed — a missing entry throws `MissingExpectedVersionError` before anything is written. Opting out is always explicit: list a stream with `'any'`, or pass `expectedVersions: 'any'` to skip the check for the whole append (e.g. order-insensitive logs or imports where no decision depends on prior state).
 
 `handleCommand` wires this automatically: the versions observed while aggregating the configured streams are enforced on append, so a concurrent command on the same stream fails with a `ConcurrencyError` instead of silently interleaving.
 

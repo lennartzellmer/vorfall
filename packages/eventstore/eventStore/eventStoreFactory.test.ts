@@ -6,7 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createDomainEvent, createEventStream } from '../utils/utilsEventStore'
 import { createProjectionDefinition } from '../utils/utilsProjections'
 import { createSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject'
-import { ConcurrencyError } from './concurrencyError'
+import { ConcurrencyError, MissingExpectedVersionError } from './concurrencyError'
 import { createEventStore } from './eventStoreFactory'
 
 describe('mongoClientWrapper Integration Tests', () => {
@@ -75,7 +75,7 @@ describe('mongoClientWrapper Integration Tests', () => {
 
   describe('appendOrCreateStream', () => {
     it('should create a new stream with a single event', async () => {
-      const result = await eventStore.appendOrCreateStream([testEvent])
+      const result = await eventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
 
       expect(result).toBeDefined()
       expect(result.totalEventsAppended).toBe(1)
@@ -102,7 +102,7 @@ describe('mongoClientWrapper Integration Tests', () => {
       // wait for 10ms to ensure the updatedAt field is different
       await new Promise(resolve => setTimeout(resolve, 10))
 
-      const result = await eventStore.appendOrCreateStream([newEvent])
+      const result = await eventStore.appendOrCreateStream([newEvent], { expectedVersions: 'any' })
 
       expect(result).toBeDefined()
       expect(result.totalEventsAppended).toBe(1)
@@ -121,7 +121,7 @@ describe('mongoClientWrapper Integration Tests', () => {
       const testeventStore = createEventStore({ connectionString })
       await testeventStore.getInstanceMongoClientWrapper().waitForConnection()
 
-      await testeventStore.appendOrCreateStream([testEvent])
+      await testeventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
 
       const collection = testeventStore.getCollectionBySubject(streamSubject)
       const indexes = await collection.indexes()
@@ -143,7 +143,7 @@ describe('mongoClientWrapper Integration Tests', () => {
       const testeventStore = createEventStore({ connectionString, projections: [projectionDefinition] })
       await testeventStore.getInstanceMongoClientWrapper().waitForConnection()
 
-      const result = await testeventStore.appendOrCreateStream([testEvent])
+      const result = await testeventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
 
       expect(result.streams[0]?.projections?.TestProjection).toEqual({ count: 1 })
     })
@@ -167,7 +167,7 @@ describe('mongoClientWrapper Integration Tests', () => {
         subject: subjectExisting,
         data: { name: 'Alice Updated' },
       })
-      const result = await testeventStore.appendOrCreateStream([testEvent, unrelatedEvent])
+      const result = await testeventStore.appendOrCreateStream([testEvent, unrelatedEvent], { expectedVersions: 'any' })
 
       expect(seenEventTypes).toEqual(['user.created'])
       expect(result.streams[0]?.projections?.TestProjection).toEqual({ count: 1 })
@@ -185,11 +185,11 @@ describe('mongoClientWrapper Integration Tests', () => {
       const testeventStore = createEventStore({ connectionString, projections: [projectionDefinition] })
       await testeventStore.getInstanceMongoClientWrapper().waitForConnection()
 
-      const result = await testeventStore.appendOrCreateStream([testEvent])
+      const result = await testeventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
 
       expect(result.streams[0]?.projections?.TestProjection).toEqual({ count: 1 })
 
-      const result2 = await testeventStore.appendOrCreateStream([testEvent])
+      const result2 = await testeventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
 
       expect(result2.streams[0]?.projections?.TestProjection).toEqual({ count: 2 })
     })
@@ -220,7 +220,7 @@ describe('mongoClientWrapper Integration Tests', () => {
       })
 
       // Append events from different streams
-      const result = await eventStore.appendOrCreateStream([event1, event2, event3])
+      const result = await eventStore.appendOrCreateStream([event1, event2, event3], { expectedVersions: 'any' })
 
       expect(result).toBeDefined()
       expect(result.totalEventsAppended).toBe(3)
@@ -273,7 +273,7 @@ describe('mongoClientWrapper Integration Tests', () => {
         data: { name: 'Dana Example', email: 'dana@example.com' },
       })
 
-      const result = await testEventStore.appendOrCreateStream([event1, event2])
+      const result = await testEventStore.appendOrCreateStream([event1, event2], { expectedVersions: 'any' })
 
       expect(result.streams.length).toBe(2)
 
@@ -310,7 +310,7 @@ describe('mongoClientWrapper Integration Tests', () => {
           data: { name: 'Erin Example', email: 'erin@example.com' },
         })
 
-        const createdResult = await testEventStore.appendOrCreateStream([created])
+        const createdResult = await testEventStore.appendOrCreateStream([created], { expectedVersions: 'any' })
         expect(createdResult.streams[0]?.projections?.DeletionProjection).toEqual({ count: 1 })
 
         const deleted = createDomainEvent({
@@ -318,7 +318,7 @@ describe('mongoClientWrapper Integration Tests', () => {
           subject,
         })
 
-        const deletedResult = await testEventStore.appendOrCreateStream([deleted])
+        const deletedResult = await testEventStore.appendOrCreateStream([deleted], { expectedVersions: 'any' })
         expect(deletedResult.streams[0]?.projections?.DeletionProjection).toBeUndefined()
 
         // The field must be removed from the stored document (via $unset), not merely set to null
@@ -336,9 +336,9 @@ describe('mongoClientWrapper Integration Tests', () => {
         const deleted = createDomainEvent({ type: 'user.deleted', subject })
         const recreated = createDomainEvent({ type: 'user.created', subject })
 
-        await testEventStore.appendOrCreateStream([created])
-        await testEventStore.appendOrCreateStream([deleted])
-        const result = await testEventStore.appendOrCreateStream([recreated])
+        await testEventStore.appendOrCreateStream([created], { expectedVersions: 'any' })
+        await testEventStore.appendOrCreateStream([deleted], { expectedVersions: 'any' })
+        const result = await testEventStore.appendOrCreateStream([recreated], { expectedVersions: 'any' })
 
         // Started fresh from initialState() (null) rather than continuing the previous count
         expect(result.streams[0]?.projections?.DeletionProjection).toEqual({ count: 1 })
@@ -353,7 +353,7 @@ describe('mongoClientWrapper Integration Tests', () => {
         const created = createDomainEvent({ type: 'user.created', subject })
         const deleted = createDomainEvent({ type: 'user.deleted', subject })
 
-        const result = await testEventStore.appendOrCreateStream([created, deleted])
+        const result = await testEventStore.appendOrCreateStream([created, deleted], { expectedVersions: 'any' })
 
         expect(result.streams[0]?.projections?.DeletionProjection).toBeUndefined()
       })
@@ -377,12 +377,12 @@ describe('mongoClientWrapper Integration Tests', () => {
         // Seed both projections with a non-null state so the second call below
         // exercises an update ($set), not just an initial creation.
         const created = createDomainEvent({ type: 'user.created', subject })
-        await testEventStore.appendOrCreateStream([created])
+        await testEventStore.appendOrCreateStream([created], { expectedVersions: 'any' })
 
         // This single append call is what's under test: DeletionProjection evolves
         // to null ($unset) while KeepProjection evolves to a new state ($set).
         const deleted = createDomainEvent({ type: 'user.deleted', subject })
-        const result = await testEventStore.appendOrCreateStream([deleted])
+        const result = await testEventStore.appendOrCreateStream([deleted], { expectedVersions: 'any' })
 
         expect(result.streams[0]?.projections?.DeletionProjection).toBeUndefined()
         expect(result.streams[0]?.projections?.KeepProjection).toEqual({ count: 2 })
@@ -392,7 +392,7 @@ describe('mongoClientWrapper Integration Tests', () => {
 
   describe('optimistic concurrency control', () => {
     it('should set and increment the stream version on append', async () => {
-      const first = await eventStore.appendOrCreateStream([testEvent])
+      const first = await eventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
       expect(first.streams[0]!.version).toBe(1)
 
       const secondEvent = createDomainEvent({
@@ -400,12 +400,12 @@ describe('mongoClientWrapper Integration Tests', () => {
         subject: subjectExisting,
         data: { name: 'Alice Updated' },
       })
-      const second = await eventStore.appendOrCreateStream([secondEvent])
+      const second = await eventStore.appendOrCreateStream([secondEvent], { expectedVersions: 'any' })
       expect(second.streams[0]!.version).toBe(2)
     })
 
     it('should append when the expected version matches', async () => {
-      await eventStore.appendOrCreateStream([testEvent])
+      await eventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
 
       const secondEvent = createDomainEvent({
         type: 'user.updated',
@@ -421,7 +421,7 @@ describe('mongoClientWrapper Integration Tests', () => {
     })
 
     it('should throw ConcurrencyError and write nothing when the expected version does not match', async () => {
-      await eventStore.appendOrCreateStream([testEvent])
+      await eventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
 
       const secondEvent = createDomainEvent({
         type: 'user.updated',
@@ -452,7 +452,7 @@ describe('mongoClientWrapper Integration Tests', () => {
       const freshStore = createEventStore({ connectionString })
       await freshStore.getInstanceMongoClientWrapper().waitForConnection()
 
-      await freshStore.appendOrCreateStream([testEvent])
+      await freshStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
 
       const append = freshStore.appendOrCreateStream([testEvent], {
         expectedVersions: new Map([[streamSubject, 'no-stream' as const]]),
@@ -480,7 +480,7 @@ describe('mongoClientWrapper Integration Tests', () => {
         data: { name: 'Bob Example' },
       })
 
-      await eventStore.appendOrCreateStream([testEvent])
+      await eventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
 
       const append = eventStore.appendOrCreateStream([testEvent, otherEvent], {
         expectedVersions: new Map<typeof streamSubject, number>([
@@ -495,6 +495,26 @@ describe('mongoClientWrapper Integration Tests', () => {
       expect(existing.events.length).toBe(1)
       const other = await eventStore.getEventStreamBySubject(otherStreamSubject)
       expect(other.streamExists).toBe(false)
+    })
+
+    it('should throw MissingExpectedVersionError and write nothing when a stream is not listed in the map', async () => {
+      const otherSubject = createSubject('user/456/created')
+      const otherStreamSubject = getStreamSubjectFromSubject(otherSubject)
+      const otherEvent = createDomainEvent({
+        type: 'user.created',
+        subject: otherSubject,
+        data: { name: 'Bob Example' },
+      })
+
+      const append = eventStore.appendOrCreateStream([testEvent, otherEvent], {
+        expectedVersions: new Map([[streamSubject, 'no-stream' as const]]),
+      })
+
+      await expect(append).rejects.toThrowError(MissingExpectedVersionError)
+      await expect(append).rejects.toMatchObject({ streamSubject: otherStreamSubject })
+
+      const existing = await eventStore.getEventStreamBySubject(streamSubject)
+      expect(existing.streamExists).toBe(false)
     })
   })
 

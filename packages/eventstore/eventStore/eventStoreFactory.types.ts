@@ -56,11 +56,13 @@ export interface AggregateStreamResult<State> {
 
 export interface AppendStreamOptions {
   /**
-   * Expected version per stream subject. Streams not listed are appended
-   * unconditionally ('any'). On a mismatch the whole append (all streams in
-   * the call) is rolled back with a ConcurrencyError.
+   * Expected version per stream subject. Every stream in the append must be
+   * listed — a missing entry throws MissingExpectedVersionError. Pass 'any'
+   * (for one stream, or as the whole value to cover all streams) to append
+   * without a concurrency check. On a mismatch the whole append (all streams
+   * in the call) is rolled back with a ConcurrencyError.
    */
-  expectedVersions?: ReadonlyMap<Subject, ExpectedStreamVersion>
+  expectedVersions: ReadonlyMap<Subject, ExpectedStreamVersion> | 'any'
 }
 
 export interface ProjectionQuery<TProjectionName extends string> {
