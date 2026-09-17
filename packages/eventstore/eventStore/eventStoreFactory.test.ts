@@ -496,29 +496,6 @@ describe('mongoClientWrapper Integration Tests', () => {
       const other = await eventStore.getEventStreamBySubject(otherStreamSubject)
       expect(other.streamExists).toBe(false)
     })
-
-    it('should backfill the version field on documents written before versioning', async () => {
-      const collection = eventStore.getCollectionBySubject(streamSubject)
-      const legacyStream = createEventStream([testEvent])
-      delete (legacyStream as Partial<typeof legacyStream>).version
-      await collection.insertOne(legacyStream, { ignoreUndefined: true })
-
-      const legacyAwareStore = createEventStore({ connectionString })
-      await legacyAwareStore.getInstanceMongoClientWrapper().waitForConnection()
-
-      const read = await legacyAwareStore.getEventStreamBySubject(streamSubject)
-      expect(read.version).toBe(1)
-
-      const secondEvent = createDomainEvent({
-        type: 'user.updated',
-        subject: subjectExisting,
-        data: { name: 'Alice Updated' },
-      })
-      const result = await legacyAwareStore.appendOrCreateStream([secondEvent], {
-        expectedVersions: new Map([[streamSubject, 1]]),
-      })
-      expect(result.streams[0]!.version).toBe(2)
-    })
   })
 
   describe('aggregateStream', () => {

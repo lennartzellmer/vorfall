@@ -8,4 +8,4 @@ Breaking changes:
 
 - `aggregateStream` now returns `{ state, version, streamExists }` instead of the bare state.
 - `ReadStreamResult` gains a required `version` field.
-- `EventStream` gains a required `version` field. Existing documents are backfilled (`version := events.length`) once per collection before the first append.
+- `EventStream` gains a required `version` field. There is no migration for stream documents written by earlier versions — they lack the field and cannot be appended to with an exact expected version. Start from an empty database.

@@ -129,9 +129,9 @@ async function processStreamInTransaction<
     if (!result && typeof expectedVersion === 'number') {
       const actual = await collection.findOne(
         { streamSubject } as Filter<EventStream<TDomainEvent, TProjections>>,
-        { projection: { version: 1, events: 1 }, ...(session && { session }) },
+        { projection: { version: 1 }, ...(session && { session }) },
       )
-      throw new ConcurrencyError(streamSubject, expectedVersion, actual ? actual.version ?? actual.events.length : undefined)
+      throw new ConcurrencyError(streamSubject, expectedVersion, actual?.version)
     }
   }
 
@@ -213,22 +213,13 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
   }
 
   // Index creation is not allowed inside a transaction, so the unique index on
-  // streamSubject is ensured (once per collection) before appends start. The
-  // same step backfills the version field on documents written before
-  // versioning existed — the $inc on append would otherwise start at 0 and the
-  // exact-version filter would never match them.
+  // streamSubject is ensured (once per collection) before appends start.
   const ensuredCollections = new Map<string, Promise<unknown>>()
   function ensureCollectionReady(collection: Collection<any>): Promise<unknown> {
     const key = collection.collectionName
     let ensured = ensuredCollections.get(key)
     if (!ensured) {
-      ensured = Promise.all([
-        retryTransient(() => collection.createIndex({ streamSubject: 1 }, { unique: true })),
-        retryTransient(() => collection.updateMany(
-          { version: { $exists: false } },
-          [{ $set: { version: { $size: '$events' } } }],
-        )),
-      ])
+      ensured = retryTransient(() => collection.createIndex({ streamSubject: 1 }, { unique: true }))
       ensured.catch(() => ensuredCollections.delete(key))
       ensuredCollections.set(key, ensured)
     }
@@ -278,9 +269,7 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
       return {
         events: stream.events,
         streamExists: true,
-        // Documents written before versioning existed carry no version field
-        // until the first append backfills the collection.
-        version: stream.version ?? stream.events.length,
+        version: stream.version,
       }
     },
 
