@@ -42,7 +42,8 @@ export async function handleCommand<
    * and return the events to append to the stream
    */
   const result = await commandHandlerFunction({ command, states: aggregatedStreamStates })
-  const eventsToAppend = Array.isArray(result) ? result : [result]
+  const eventsToAppend: Array<InferDomainEventFromCommandHandler<TCommandHandlerFunction>>
+    = Array.isArray(result) ? result : [result]
 
   /**
    * Streams the handler emits to without having aggregated them carry no
