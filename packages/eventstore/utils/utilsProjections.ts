@@ -1,6 +1,6 @@
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
 import type { EventStreamWithProjection, ProjectionQuery } from '../eventStore/eventStoreFactory.types'
-import type { AnyDomainEvent, Brand, DefaultRecord, Subject } from '../types/index'
+import type { AnyDomainEvent, Brand, Subject } from '../types/index'
 import type {
   AnyProjectionDefinition,
   EntitySelection,
@@ -29,7 +29,7 @@ import { transformFilterForNestedPath } from './utilsMongoFilter'
  */
 export function createProjectionDefinition<
   TName extends string,
-  TState extends DefaultRecord,
+  TState extends object,
   TEvent extends AnyDomainEvent,
 >(config: {
   name: TName

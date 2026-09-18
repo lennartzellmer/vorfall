@@ -59,7 +59,8 @@ interface UserProfile {
 
 // Create a projection for user profiles.
 // canHandle is a list of event types; evolve only ever receives those.
-// Returning null deletes the projection from the stream document.
+// Returning null removes the projection from the stream document; the next
+// applicable event starts again from initialState().
 const userProfileProjection = createProjectionDefinition({
   name: 'userProfile',
   canHandle: ['user.registered', 'user.profileUpdated'],
@@ -176,7 +177,7 @@ yarn add vorfall
 
 ## Aggregates
 
-`defineAggregate` derives everything one aggregate needs from a single `evolve`/`initialState` pair: the stream subject, the `streams` entry for `handleCommand` and the projection definition for `createEventStore`.
+`defineAggregate` derives everything one aggregate needs from a single `evolve` function: the stream subject, the `streams` entry for `handleCommand` and the projection definition for `createEventStore`. An aggregate has no state until its first event and none again after `evolve` returns `null`; both the command-side fold and the projection start from `null`, so the two never disagree.
 
 ```typescript
 import { defineAggregate } from 'vorfall'
@@ -184,7 +185,6 @@ import { defineAggregate } from 'vorfall'
 const user = defineAggregate({
   name: 'user',
   evolve: (state: UserProfile | null, event: UserEvent): UserProfile | null => { /* ... */ },
-  initialState: () => null,
 })
 
 user.subject('123') // 'user/123'

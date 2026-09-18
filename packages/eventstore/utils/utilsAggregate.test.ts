@@ -12,9 +12,7 @@ interface Counter {
   value: number
 }
 
-type CounterState = Counter & Record<string, unknown>
-
-function evolve(state: CounterState | null, event: CounterEvent): CounterState | null {
+function evolve(state: Counter | null, event: CounterEvent): Counter | null {
   switch (event.type) {
     case 'counter.created':
       return event.data
@@ -22,14 +20,9 @@ function evolve(state: CounterState | null, event: CounterEvent): CounterState |
       return state ? { ...state, value: state.value + event.data.by } : null
   }
 }
-function initialState(): CounterState | null {
-  return null
-}
-
 const counter = defineAggregate({
   name: 'counter',
   evolve,
-  initialState,
 })
 
 describe('defineAggregate', () => {
@@ -38,7 +31,11 @@ describe('defineAggregate', () => {
     expect(counter.projection.entity).toBe('counter')
     expect(counter.projection.canHandle).toBeUndefined()
     expect(counter.projection.evolve).toBe(evolve)
-    expect(counter.projection.initialState).toBe(initialState)
+  })
+
+  it('starts the aggregate from null on both the command side and the projection', () => {
+    expect(counter.projection.initialState()).toBeNull()
+    expect(counter.stream('42').initialState()).toBeNull()
   })
 
   it('builds the stream subject as <name>/<id>', () => {
@@ -50,6 +47,6 @@ describe('defineAggregate', () => {
   })
 
   it('provides the stream configuration for handleCommand', () => {
-    expect(counter.stream('42')).toEqual({ evolve, initialState, streamSubject: 'counter/42' })
+    expect(counter.stream('42')).toMatchObject({ evolve, streamSubject: 'counter/42' })
   })
 })

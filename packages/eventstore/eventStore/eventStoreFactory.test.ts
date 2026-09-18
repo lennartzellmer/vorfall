@@ -244,6 +244,54 @@ describe('mongoClientWrapper Integration Tests', () => {
       expect(stream.version).toBe(1)
       expect(stream.events.map(event => event.type)).toEqual(['user.created'])
     })
+    it('should restart a projection from its initial state after evolve returned null, however the events are batched', async () => {
+      // evolve tells null and the initial state apart: an increment on a
+      // removed counter stays removed, an increment on the initial state counts.
+      const counterProjection = createProjectionDefinition({
+        name: 'Counter',
+        entity: 'user',
+        evolve: (state: { count: number } | null, event: DomainEvent<'user.created' | 'user.reset'>) => {
+          if (event.type === 'user.reset')
+            return null
+          return state ? { count: state.count + 1 } : null
+        },
+        initialState: () => ({ count: 0 }),
+      })
+      const testeventStore = createEventStore({ connectionString, projections: [counterProjection] })
+      await testeventStore.getInstanceMongoClientWrapper().waitForConnection()
+      const created = () => createDomainEvent({ type: 'user.created', subject: subjectExisting, data: { name: 'Alice Example', email: 'alice@example.com' } })
+      const reset = createDomainEvent({ type: 'user.reset', subject: subjectExisting, data: undefined })
+
+      const oneBatch = await testeventStore.appendOrCreateStream([created(), reset, created()], { expectedVersions: 'any' })
+      expect(oneBatch.streams[0]?.projections?.Counter).toEqual({ count: 1 })
+
+      const otherSubject = createSubject('user/456/created')
+      const otherCreated = () => createDomainEvent({ type: 'user.created', subject: otherSubject, data: { name: 'Bob', email: 'bob@example.com' } })
+      const otherReset = createDomainEvent({ type: 'user.reset', subject: otherSubject, data: undefined })
+      await testeventStore.appendOrCreateStream([otherCreated(), otherReset], { expectedVersions: 'any' })
+      const twoBatches = await testeventStore.appendOrCreateStream([otherCreated()], { expectedVersions: 'any' })
+      expect(twoBatches.streams[0]?.projections?.Counter).toEqual({ count: 1 })
+
+      const aggregated = await testeventStore.aggregateStream(streamSubject, { evolve: counterProjection.evolve, initialState: counterProjection.initialState })
+      expect(aggregated.state).toEqual({ count: 1 })
+    })
+    it('should not carry the storage _id on a stream returned after a projection folded', async () => {
+      const projectionDefinition = createProjectionDefinition({
+        name: 'TestProjection',
+        entity: 'user',
+        evolve: (state: { count: number } | null) => ({ count: (state?.count ?? 0) + 1 }),
+        initialState: () => ({ count: 0 }),
+      })
+      const testeventStore = createEventStore({ connectionString, projections: [projectionDefinition] })
+      await testeventStore.getInstanceMongoClientWrapper().waitForConnection()
+
+      const created = await testeventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
+      const appended = await testeventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
+
+      expect(created.streams[0]).not.toHaveProperty('_id')
+      expect(appended.streams[0]).not.toHaveProperty('_id')
+      expect(appended.streams[0]?.projections?.TestProjection).toEqual({ count: 2 })
+    })
     it('should update an already existing projection', async () => {
       const projectionDefinition = createProjectionDefinition({
         name: 'TestProjection',

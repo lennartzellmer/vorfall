@@ -139,7 +139,9 @@ async function processStreamInTransaction<
 
       let state = result?.projections?.[projection.name] ?? projection.initialState()
       for (const event of handledEvents) {
-        state = projection.evolve(state, event)
+        // A null from evolve removes the projection; the next event starts
+        // again from the initial state, exactly as it would in a later append.
+        state = projection.evolve(state ?? projection.initialState(), event)
         // undefined means evolve has no case for this event type; failing the
         // append here keeps the projection from going silently stale.
         if (state === undefined) {
@@ -173,6 +175,7 @@ async function processStreamInTransaction<
           useBigInt64: true,
           ignoreUndefined: true,
           returnDocument: 'after',
+          projection: { _id: 0 },
           ...(session && { session }),
         },
       )
@@ -286,7 +289,9 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
     ): Promise<AggregateStreamResult<State>> {
       const { evolve, initialState } = options
       const { events, streamExists, version } = await this.getEventStreamBySubject<TDomainEvent>(streamSubject)
-      const state = events.reduce((state, event) => evolve(state, event), initialState())
+      // Same rule as the projection fold: after evolve returned null, the next
+      // event starts again from the initial state.
+      const state = events.reduce((state, event) => evolve(state ?? initialState(), event), initialState())
       return { state, streamExists, version }
     },
 

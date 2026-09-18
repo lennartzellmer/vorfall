@@ -12,8 +12,8 @@ import { getStreamSubjectFromSubject } from '../utils/utilsSubject'
  * reported as a domain-level "not found".
  */
 export class StreamNotLoadedError extends Error {
-  constructor(subject: Subject) {
-    super(`Stream "${subject}" was read by the command handler but is not listed in streams`)
+  constructor(public readonly streamSubject: Subject) {
+    super(`Stream "${streamSubject}" was read by the command handler but is not listed in streams`)
     this.name = 'StreamNotLoadedError'
   }
 }

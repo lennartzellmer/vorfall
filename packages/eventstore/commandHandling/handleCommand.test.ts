@@ -461,12 +461,15 @@ describe('handleCommand', () => {
       return createDomainEvent({ type: 'test.read', subject: listed, data: undefined })
     }
 
-    await expect(handleCommand({
+    const handled = handleCommand({
       streams: [{ evolve: (state: null) => state, initialState: () => null, streamSubject: listed }],
       eventStore: mockEventStore,
       commandHandlerFunction,
       command: createCommand({ type: 'Read' }),
-    })).rejects.toBeInstanceOf(StreamNotLoadedError)
+    })
+
+    await expect(handled).rejects.toBeInstanceOf(StreamNotLoadedError)
+    await expect(handled).rejects.toMatchObject({ streamSubject: forgotten })
 
     expect(mockEventStore.appendOrCreateStream).not.toHaveBeenCalled()
   })
