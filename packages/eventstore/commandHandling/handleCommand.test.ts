@@ -1,11 +1,19 @@
 import type { MockedObject } from 'vitest'
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
-import type { Command, DomainEvent } from '../types/index'
+import type { Command, DomainEvent, Subject } from '../types/index'
 import { describe, expect, it, vi } from 'vitest'
 import { createDomainEvent, createEventStream } from '../utils/utilsEventStore'
 import { createStreamSubject } from '../utils/utilsSubject'
-import { handleCommand } from './handleCommand'
+import { handleCommand, StreamNotLoadedError } from './handleCommand'
 import { createCommand } from './utilsCommand'
+
+/**
+ * The states handed to the handler are a Map subclass that guards reads of
+ * unlisted streams; copy the entries into a plain Map to compare contents.
+ */
+function statesGivenTo(commandHandlerFunction: { mock: { calls: any[][] } }): Map<Subject, unknown> {
+  return new Map(commandHandlerFunction.mock.calls[0]![0].states)
+}
 
 describe('handleCommand', () => {
   it('should aggregate stream, execute command handler, and append events', async () => {
@@ -70,7 +78,8 @@ describe('handleCommand', () => {
       evolve,
       initialState,
     })
-    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementCounterCommand, states: new Map([[streamSubject, mockedAggregatedState]]) })
+    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementCounterCommand, states: expect.any(Map) })
+    expect(statesGivenTo(commandHandlerFunction)).toEqual(new Map([[streamSubject, mockedAggregatedState]]))
     expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith(
       [counterIncrementedEvent],
       { expectedVersions: new Map([[streamSubject, 3]]) },
@@ -145,7 +154,8 @@ describe('handleCommand', () => {
       evolve,
       initialState,
     })
-    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementCounterCommand, states: new Map([[streamSubject, mockedAggregatedState]]) })
+    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementCounterCommand, states: expect.any(Map) })
+    expect(statesGivenTo(commandHandlerFunction)).toEqual(new Map([[streamSubject, mockedAggregatedState]]))
     expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith(
       [counterIncrementedEvent],
       { expectedVersions: new Map([[streamSubject, 1]]) },
@@ -236,7 +246,8 @@ describe('handleCommand', () => {
       evolve,
       initialState,
     })
-    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementTwiceCommand, states: new Map([[streamSubject, mockedAggregatedState]]) })
+    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: incrementTwiceCommand, states: expect.any(Map) })
+    expect(statesGivenTo(commandHandlerFunction)).toEqual(new Map([[streamSubject, mockedAggregatedState]]))
     expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith(
       [counterIncrementedEvent1, counterIncrementedEvent2],
       { expectedVersions: new Map([[streamSubject, 1]]) },
@@ -407,8 +418,9 @@ describe('handleCommand', () => {
     ])
     expect(commandHandlerFunction).toHaveBeenCalledWith({
       command: subscribeCommand,
-      states: expectedStatesMap,
+      states: expect.any(Map),
     })
+    expect(statesGivenTo(commandHandlerFunction)).toEqual(expectedStatesMap)
 
     // Verify events were appended - check structure instead of exact events due to random IDs
     expect(mockEventStore.appendOrCreateStream).toHaveBeenCalledWith(
@@ -433,5 +445,56 @@ describe('handleCommand', () => {
     )
 
     expect(result).toBe(mockedNewState)
+  })
+
+  it('should reject with StreamNotLoadedError when the handler reads a stream that is not listed', async () => {
+    const mockEventStore = {
+      aggregateStream: vi.fn().mockResolvedValue({ state: null, streamExists: false, version: 0 }),
+      appendOrCreateStream: vi.fn(),
+    } as MockedObject<EventStoreInstance>
+
+    const listed = createStreamSubject('test/listed')
+    const forgotten = createStreamSubject('test/forgotten')
+
+    const commandHandlerFunction = ({ states }: { command: unknown, states?: Map<Subject, unknown> }) => {
+      states?.get(forgotten)
+      return createDomainEvent({ type: 'test.read', subject: listed, data: undefined })
+    }
+
+    const handled = handleCommand({
+      streams: [{ evolve: (state: null) => state, initialState: () => null, streamSubject: listed }],
+      eventStore: mockEventStore,
+      commandHandlerFunction,
+      command: createCommand({ type: 'Read' }),
+    })
+
+    await expect(handled).rejects.toBeInstanceOf(StreamNotLoadedError)
+    await expect(handled).rejects.toMatchObject({ streamSubject: forgotten })
+
+    expect(mockEventStore.appendOrCreateStream).not.toHaveBeenCalled()
+  })
+
+  it('should hand the handler the initial state of a listed stream that does not exist yet', async () => {
+    const mockEventStore = {
+      aggregateStream: vi.fn().mockResolvedValue({ state: null, streamExists: false, version: 0 }),
+      appendOrCreateStream: vi.fn().mockResolvedValue({ streams: [], totalEventsAppended: 1, streamSubjects: [] }),
+    } as MockedObject<EventStoreInstance>
+
+    const listed = createStreamSubject('test/listed')
+    let seenState: unknown = 'unset'
+
+    const commandHandlerFunction = ({ states }: { command: unknown, states?: Map<Subject, unknown> }) => {
+      seenState = states?.get(listed)
+      return createDomainEvent({ type: 'test.read', subject: listed, data: undefined })
+    }
+
+    await handleCommand({
+      streams: [{ evolve: (state: null) => state, initialState: () => null, streamSubject: listed }],
+      eventStore: mockEventStore,
+      commandHandlerFunction,
+      command: createCommand({ type: 'Read' }),
+    })
+
+    expect(seenState).toBeNull()
   })
 })

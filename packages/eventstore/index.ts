@@ -1,4 +1,5 @@
 export * from './commandHandling/handleCommand'
+export * from './commandHandling/handleCommand.types'
 export * from './commandHandling/utilsCommand'
 export * from './eventStore/concurrencyError'
 export * from './eventStore/eventStoreFactory'

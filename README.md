@@ -59,7 +59,8 @@ interface UserProfile {
 
 // Create a projection for user profiles.
 // canHandle is a list of event types; evolve only ever receives those.
-// Returning null deletes the projection from the stream document.
+// Returning null removes the projection from the stream document; the next
+// applicable event starts again from initialState().
 const userProfileProjection = createProjectionDefinition({
   name: 'userProfile',
   canHandle: ['user.registered', 'user.profileUpdated'],
@@ -151,6 +152,8 @@ Checking is the default: `expectedVersions` is required, and when it is a map, e
 
 `handleCommand` wires this automatically: the versions observed while aggregating the configured streams are enforced on append, so a concurrent command on the same stream fails with a `ConcurrencyError` instead of silently interleaving.
 
+The `states` map handed to the command handler contains one entry per listed stream, with the initial state for streams that do not exist yet. Reading a subject that was not listed throws a `StreamNotLoadedError`, so a wiring mistake in the caller is not mistaken for a missing stream.
+
 ## Installation
 
 ```bash
@@ -171,6 +174,34 @@ yarn add vorfall
 - **Event Store** - One document per stream, holding its events and projection states (`createEventStore`, `appendOrCreateStream`, `getEventStreamBySubject`, `aggregateStream`)
 - **Projections** - Read models folded from events and persisted on the stream document on every append (`createProjectionDefinition`, `findOneProjection`, `findMultipleProjections`, `countProjections`)
 - **Commands** - Operations that may produce events (`createCommand`, `handleCommand`)
+
+## Aggregates
+
+`defineAggregate` derives everything one aggregate needs from a single `evolve` function: the stream subject, the `streams` entry for `handleCommand` and the projection definition for `createEventStore`. An aggregate has no state until its first event and none again after `evolve` returns `null`; both the command-side fold and the projection start from `null`, so the two never disagree.
+
+```typescript
+import { defineAggregate } from 'vorfall'
+
+const user = defineAggregate({
+  name: 'user',
+  evolve: (state: UserProfile | null, event: UserEvent): UserProfile | null => { /* ... */ },
+})
+
+user.subject('123') // 'user/123'
+user.stream('123') // { evolve, initialState, streamSubject: 'user/123' } for handleCommand
+user.projection // for createEventStore({ projections: [user.projection] })
+```
+
+The aggregate's projection is selected by entity, not by event type: it folds every event of every stream under `user/`. `evolve` is therefore the only place that lists the aggregate's event types. An exhaustive `switch` in it is the completeness check at compile time; at runtime, an event whose type `evolve` has no case for fails the append with an `UnhandledProjectionEventError` instead of leaving the projection silently stale. A projection selected by `canHandle` remains the right tool when it deliberately observes a subset of events, possibly across entities:
+
+```typescript
+const registrations = createProjectionDefinition({
+  name: 'registrations',
+  canHandle: ['user.registered'],
+  evolve: (state: { count: number } | null) => ({ count: (state?.count ?? 0) + 1 }),
+  initialState: () => ({ count: 0 }),
+})
+```
 
 ## CQRS Pattern Support
 

@@ -1,5 +1,5 @@
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
-import type { AnyDomainEvent, Command, Subject } from '../types/index'
+import type { AnyDomainEvent, Command, DefaultRecord, Subject } from '../types/index'
 
 // Utility types to extract domain event type from command handler function return type
 export type ExtractDomainEventFromReturnType<T>
@@ -57,5 +57,3 @@ export type CommandHandlerFunction<
   | TDomainEvent[]
   | Promise<TDomainEvent>
   | Promise<TDomainEvent[]>
-
-export type DefaultRecord = Record<string, unknown>

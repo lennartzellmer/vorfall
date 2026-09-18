@@ -1,3 +1,4 @@
+export * from './utilsAggregate'
 export * from './utilsEventStore'
 export * from './utilsMongoFilter'
 export * from './utilsProjections'

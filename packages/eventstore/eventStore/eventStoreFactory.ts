@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { MongoServerError } from 'mongodb'
 import { MongoClientWrapper } from '../mongoClient/mongoClientWrapper'
 import { createEventStream, groupEventsByStreamSubject } from '../utils/utilsEventStore'
+import { selectEventsForProjection, UnhandledProjectionEventError } from '../utils/utilsProjections'
 import { getCollectionNameFromSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject'
 import { ConcurrencyError, MissingExpectedVersionError } from './concurrencyError'
 
@@ -128,20 +129,25 @@ async function processStreamInTransaction<
   }
 
   if (projections && projections.length > 0) {
-    const eventTypes = events.map(event => event.type)
-    const applicableProjections = projections.filter(p =>
-      p.canHandle.some(type => eventTypes.includes(type)),
-    )
-
     const setUpdates: Record<string, any> = {}
     const unsetUpdates: Record<string, any> = {}
-    for (const projection of applicableProjections) {
-      const state = events
-        .filter(event => projection.canHandle.includes(event.type))
-        .reduce(
-          (state, event) => projection.evolve(state, event),
-          result?.projections?.[projection.name] ?? projection.initialState(),
-        )
+    for (const projection of projections) {
+      const handledEvents = selectEventsForProjection(projection, streamSubject, events)
+      if (handledEvents.length === 0) {
+        continue
+      }
+
+      let state = result?.projections?.[projection.name] ?? projection.initialState()
+      for (const event of handledEvents) {
+        // A null from evolve removes the projection; the next event starts
+        // again from the initial state, exactly as it would in a later append.
+        state = projection.evolve(state ?? projection.initialState(), event)
+        // undefined means evolve has no case for this event type; failing the
+        // append here keeps the projection from going silently stale.
+        if (state === undefined) {
+          throw new UnhandledProjectionEventError(projection.name, event.type)
+        }
+      }
 
       if (state === null) {
         unsetUpdates[`projections.${projection.name}`] = ''
@@ -158,16 +164,22 @@ async function processStreamInTransaction<
     if (Object.keys(unsetUpdates).length > 0) {
       projectionUpdates.$unset = unsetUpdates
     }
-    result = await collection.findOneAndUpdate(
-      { streamSubject },
-      projectionUpdates,
-      {
-        useBigInt64: true,
-        ignoreUndefined: true,
-        returnDocument: 'after',
-        ...(session && { session }),
-      },
-    )
+
+    // MongoDB rejects an update without operators, so an append that no
+    // configured projection folds leaves the document as written above.
+    if (Object.keys(projectionUpdates).length > 0) {
+      result = await collection.findOneAndUpdate(
+        { streamSubject },
+        projectionUpdates,
+        {
+          useBigInt64: true,
+          ignoreUndefined: true,
+          returnDocument: 'after',
+          projection: { _id: 0 },
+          ...(session && { session }),
+        },
+      )
+    }
   }
 
   if (!result) {
@@ -277,7 +289,9 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
     ): Promise<AggregateStreamResult<State>> {
       const { evolve, initialState } = options
       const { events, streamExists, version } = await this.getEventStreamBySubject<TDomainEvent>(streamSubject)
-      const state = events.reduce((state, event) => evolve(state, event), initialState())
+      // Same rule as the projection fold: after evolve returned null, the next
+      // event starts again from the initial state.
+      const state = events.reduce((state, event) => evolve(state ?? initialState(), event), initialState())
       return { state, streamExists, version }
     },
 

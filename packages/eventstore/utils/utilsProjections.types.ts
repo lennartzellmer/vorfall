@@ -5,23 +5,50 @@ export type MessageTypeOf<T extends AnyDomainEvent> = T['type']
 
 export type CanHandle<T extends AnyDomainEvent> = MessageTypeOf<T>[]
 
-export interface ProjectionDefinition<
+/**
+ * Selects a projection's events by type: it folds the listed event types from
+ * any stream that carries one of them. For projections that observe a chosen
+ * subset of events.
+ */
+export interface EventTypeSelection<TEventType extends AnyDomainEvent> {
+  canHandle: CanHandle<TEventType>
+  entity?: undefined
+}
+
+/**
+ * Selects a projection's events by entity: it folds every event of every
+ * stream whose subject starts with `<entity>/`. For aggregate projections,
+ * whose `evolve` handles all events of their own stream; there is no event
+ * type list that could drift from `evolve`.
+ */
+export interface EntitySelection {
+  entity: string
+  canHandle?: undefined
+}
+
+export interface ProjectionBase<
   TState,
   TName extends string = string,
   TEventType extends AnyDomainEvent = AnyDomainEvent,
 > {
   name: TName
-  canHandle: CanHandle<TEventType>
   /**
-   * `state` is null when the projection doesn't exist yet (before the first
-   * applicable event) or was deleted by a previous evolve call in the same
-   * batch. Returning `null` deletes the projection document: the event store
-   * removes `projections.<name>` from the stream instead of persisting a
-   * null value.
+   * `state` is `initialState()` when the projection is absent, whether it
+   * never materialised or an earlier `evolve` removed it; it is `null` only
+   * when `initialState()` returns null. Returning `null` removes the
+   * projection: the event store unsets `projections.<name>` instead of
+   * persisting a null value, and the next applicable event starts again from
+   * `initialState()`, however the events are batched.
    */
   evolve: (state: TState | null, event: TEventType) => TState | null
   initialState: () => TState | null
 }
+
+export type ProjectionDefinition<
+  TState,
+  TName extends string = string,
+  TEventType extends AnyDomainEvent = AnyDomainEvent,
+> = ProjectionBase<TState, TName, TEventType> & (EventTypeSelection<TEventType> | EntitySelection)
 
 export type AnyProjectionDefinition = ProjectionDefinition<any, any, any>
 
