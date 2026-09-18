@@ -27,7 +27,7 @@ describe('mongoClientWrapper Integration Tests', () => {
   beforeAll(async () => {
     // Start in-memory MongoDB replica set for transaction support
     replSet = await MongoMemoryReplSet.create({
-      replSet: { count: 3 }, // Create a replica set with 3 members
+      replSet: { count: 1 }, // Single member: transactions work, elections cannot happen
     })
     connectionString = replSet.getUri()
     eventStore = createEventStore({ connectionString })
