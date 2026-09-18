@@ -1,20 +1,18 @@
 import type { ExpectedStreamVersion } from '../eventStore/concurrencyError'
 import type { MultiStreamAppendResult } from '../eventStore/eventStoreFactory.types'
 import type { AnyDomainEvent, Subject } from '../types/domainEvent.types'
-import type { CommandHandlerOptions, DefaultRecord, InferDomainEventFromCommandHandler, StreamConfig } from './handleCommand.types'
+import type { CommandHandlerOptions, CreateStatesMap, DefaultRecord, StreamConfig } from './handleCommand.types'
 import { getStreamSubjectFromSubject } from '../utils/utilsSubject'
-
-type CommandHandlerResult = AnyDomainEvent | Array<AnyDomainEvent> | Promise<AnyDomainEvent | Array<AnyDomainEvent>>
 
 export async function handleCommand<
   Streams extends ReadonlyArray<StreamConfig<any, any>>,
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  TCommandHandlerFunction extends (params: { command: any, states?: Map<Subject, any> }) => CommandHandlerResult = (params: { command: any, states?: Map<Subject, any> }) => CommandHandlerResult,
+  TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
 >(
-  options: CommandHandlerOptions<Streams, CommandType, CommandData, CommandMetadata, TCommandHandlerFunction>,
-): Promise<MultiStreamAppendResult<InferDomainEventFromCommandHandler<TCommandHandlerFunction>, any>> {
+  options: CommandHandlerOptions<Streams, CommandType, CommandData, CommandMetadata, TDomainEvent>,
+): Promise<MultiStreamAppendResult<TDomainEvent, any>> {
   const {
     eventStore,
     streams,
@@ -28,10 +26,13 @@ export async function handleCommand<
    * The version seen at read time is remembered per stream so the append
    * below fails with a ConcurrencyError if a stream changed in between.
    */
-  const aggregatedStreamStates: Map<Subject, any> = new Map()
+  // CreateStatesMap adds a type-level view of the per-subject states onto the
+  // Map; at runtime it is a plain Map, so the assertion is the only way to
+  // construct it.
+  const aggregatedStreamStates = new Map<Subject, any>() as CreateStatesMap<Streams>
   const expectedVersions: Map<Subject, ExpectedStreamVersion> = new Map()
   for (const stream of streams) {
-    const { state, version } = await eventStore.aggregateStream<any, InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(stream.streamSubject, {
+    const { state, version } = await eventStore.aggregateStream<any, TDomainEvent>(stream.streamSubject, {
       evolve: stream.evolve,
       initialState: stream.initialState,
     })
@@ -44,10 +45,7 @@ export async function handleCommand<
    * and return the events to append to the stream
    */
   const result = await commandHandlerFunction({ command, states: aggregatedStreamStates })
-  // The constraint types result as AnyDomainEvent | Array<AnyDomainEvent>;
-  // the cast narrows to the concrete handler's inferred event union, which
-  // the compiler cannot connect to the generic on its own.
-  const eventsToAppend = (Array.isArray(result) ? result : [result]) as Array<InferDomainEventFromCommandHandler<TCommandHandlerFunction>>
+  const eventsToAppend: Array<TDomainEvent> = Array.isArray(result) ? result : [result]
 
   /**
    * Streams the handler emits to without having aggregated them carry no
@@ -61,7 +59,7 @@ export async function handleCommand<
     }
   }
 
-  const newState = await eventStore.appendOrCreateStream<InferDomainEventFromCommandHandler<TCommandHandlerFunction>>(
+  const newState = await eventStore.appendOrCreateStream<TDomainEvent>(
     eventsToAppend,
     { expectedVersions },
   )

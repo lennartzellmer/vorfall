@@ -24,12 +24,12 @@ export interface CommandHandlerOptions<
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  TCommandHandlerFunction extends CommandHandlerFunction<Streams, CommandType, CommandData, CommandMetadata, any> = CommandHandlerFunction<Streams, CommandType, CommandData, CommandMetadata, any>,
+  TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
 > {
   eventStore: EventStoreInstance<any>
   streams: Streams
   command: Command<CommandType, CommandData, CommandMetadata>
-  commandHandlerFunction: TCommandHandlerFunction
+  commandHandlerFunction: CommandHandlerFunction<Streams, CommandType, CommandData, CommandMetadata, TDomainEvent>
 }
 
 // Helper type to extract state types from streams array
@@ -37,7 +37,7 @@ type StreamStatesMap<Streams extends readonly StreamConfig<any, any>[]> = {
   [K in keyof Streams]: Streams[K] extends StreamConfig<infer State, any> ? [Streams[K]['streamSubject'], State] : never
 }[number]
 
-type CreateStatesMap<Streams extends readonly StreamConfig<any, any>[]>
+export type CreateStatesMap<Streams extends readonly StreamConfig<any, any>[]>
   = Map<Subject, any> & {
     [K in StreamStatesMap<Streams> as K extends readonly [infer Subject, any] ? Subject : never]:
     K extends readonly [any, infer State] ? State : never
