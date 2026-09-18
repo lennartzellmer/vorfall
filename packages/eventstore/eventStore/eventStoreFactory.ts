@@ -170,7 +170,6 @@ async function processStreamInTransaction<
           useBigInt64: true,
           ignoreUndefined: true,
           returnDocument: 'after',
-          projection: { _id: 0 },
           ...(session && { session }),
         },
       )
