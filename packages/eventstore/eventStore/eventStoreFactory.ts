@@ -2,14 +2,14 @@ import type { ClientSession, Collection, Filter, PushOperator, UpdateFilter } fr
 import type { AnyDomainEvent, Subject } from '../types/index'
 import type { ProjectionDefinition } from '../utils/utilsProjections.types'
 import type { ExpectedStreamVersion } from './concurrencyError'
-import type { AggregateStreamResult, AppendStreamOptions, EventStoreOptions, EventStream, MultiStreamAppendResult, ReadStreamResult } from './eventStoreFactory.types'
-import { randomUUID } from 'node:crypto'
+import type { AggregateStreamResult, AppendStreamOptions, EventStoreOptions, EventStream, MultiStreamAppendResult, ReadStreamResult, StoredEventStream } from './eventStoreFactory.types'
 import { MongoServerError } from 'mongodb'
 import { MongoClientWrapper } from '../mongoClient/mongoClientWrapper'
 import { createEventStream, groupEventsByStreamSubject } from '../utils/utilsEventStore'
 import { selectEventsForProjection, UnhandledProjectionEventError } from '../utils/utilsProjections'
 import { getCollectionNameFromSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject'
 import { ConcurrencyError, MissingExpectedVersionError } from './concurrencyError'
+import { fromDocument, toDocument } from './eventStreamDocument'
 
 export interface EventStoreInstance<
   TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
@@ -17,10 +17,10 @@ export interface EventStoreInstance<
   getInstanceMongoClientWrapper: () => MongoClientWrapper
   getCollectionBySubject: <TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
     subject: Subject,
-  ) => Collection<EventStream<TDomainEvent, TProjections>>
+  ) => Collection<StoredEventStream<TDomainEvent, TProjections>>
   getCollectionByEntity: <TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
     entity: string,
-  ) => Collection<EventStream<TDomainEvent, TProjections>>
+  ) => Collection<StoredEventStream<TDomainEvent, TProjections>>
   getEventStreamBySubject: <TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
     subject: Subject,
   ) => Promise<ReadStreamResult<TDomainEvent>>
@@ -49,28 +49,26 @@ async function processStreamInTransaction<
 >(
   streamSubject: Subject,
   events: Array<TDomainEvent>,
-  collection: Collection<EventStream<TDomainEvent, TProjections>>,
+  collection: Collection<StoredEventStream<TDomainEvent, TProjections>>,
   projections: TProjections,
   expectedVersion: ExpectedStreamVersion,
   session?: ClientSession,
 ): Promise<EventStream<TDomainEvent, TProjections>> {
   const now = new Date()
 
-  let result: EventStream<TDomainEvent, TProjections> | null
+  let result: StoredEventStream<TDomainEvent, TProjections> | null
 
   if (expectedVersion === 'no-stream' || expectedVersion === 0) {
-    const newStream = createEventStream<TDomainEvent, TProjections>(events)
+    const newStream = toDocument(createEventStream<TDomainEvent, TProjections>(events))
 
     try {
-      // Insert a copy: the driver mutates the given document with the
-      // generated _id, which must not leak into the returned stream.
-      await collection.insertOne({ ...newStream }, {
+      await collection.insertOne(newStream, {
         ignoreUndefined: true,
         ...(session && { session }),
       })
     }
     catch (error) {
-      // The unique index on streamSubject rejects a concurrent create. The
+      // The _id index rejects a concurrent create of the same subject. The
       // actual version cannot be read here: the failed write already aborted
       // the transaction.
       if (error instanceof MongoServerError && error.code === 11000) {
@@ -82,26 +80,24 @@ async function processStreamInTransaction<
     result = newStream
   }
   else {
-    const versionFilter: Filter<EventStream<TDomainEvent, TProjections>>
+    const versionFilter: Filter<StoredEventStream<TDomainEvent, TProjections>>
       = typeof expectedVersion === 'number'
-        ? ({ streamSubject, version: expectedVersion } as Filter<EventStream<TDomainEvent, TProjections>>)
-        : ({ streamSubject } as Filter<EventStream<TDomainEvent, TProjections>>)
+        ? ({ _id: streamSubject, version: expectedVersion } as Filter<StoredEventStream<TDomainEvent, TProjections>>)
+        : ({ _id: streamSubject } as Filter<StoredEventStream<TDomainEvent, TProjections>>)
 
-    const updates: UpdateFilter<EventStream<TDomainEvent, TProjections>> = {
+    const updates: UpdateFilter<StoredEventStream<TDomainEvent, TProjections>> = {
       $setOnInsert: {
-        'streamId': randomUUID(),
         'metadata.createdAt': now,
-        streamSubject,
       },
       $set: {
         'metadata.updatedAt': now,
       },
       $inc: {
         version: events.length,
-      } as NonNullable<UpdateFilter<EventStream<TDomainEvent, TProjections>>['$inc']>,
+      } as NonNullable<UpdateFilter<StoredEventStream<TDomainEvent, TProjections>>['$inc']>,
       $push: {
         events: { $each: events },
-      } as PushOperator<EventStream<TDomainEvent, TProjections>>,
+      } as PushOperator<StoredEventStream<TDomainEvent, TProjections>>,
     }
 
     result = await collection.findOneAndUpdate(
@@ -114,14 +110,13 @@ async function processStreamInTransaction<
         upsert: expectedVersion === 'any',
         ignoreUndefined: true,
         returnDocument: 'after',
-        projection: { _id: 0 },
         ...(session && { session }),
       },
     )
 
     if (!result && typeof expectedVersion === 'number') {
       const actual = await collection.findOne(
-        { streamSubject } as Filter<EventStream<TDomainEvent, TProjections>>,
+        { _id: streamSubject } as Filter<StoredEventStream<TDomainEvent, TProjections>>,
         { projection: { version: 1 }, ...(session && { session }) },
       )
       throw new ConcurrencyError(streamSubject, expectedVersion, actual?.version)
@@ -157,7 +152,7 @@ async function processStreamInTransaction<
       }
     }
 
-    const projectionUpdates: UpdateFilter<EventStream<TDomainEvent, TProjections>> = {}
+    const projectionUpdates: UpdateFilter<StoredEventStream<TDomainEvent, TProjections>> = {}
     if (Object.keys(setUpdates).length > 0) {
       projectionUpdates.$set = setUpdates
     }
@@ -169,7 +164,7 @@ async function processStreamInTransaction<
     // configured projection folds leaves the document as written above.
     if (Object.keys(projectionUpdates).length > 0) {
       result = await collection.findOneAndUpdate(
-        { streamSubject },
+        { _id: streamSubject },
         projectionUpdates,
         {
           useBigInt64: true,
@@ -186,7 +181,7 @@ async function processStreamInTransaction<
     throw new Error(`Failed to upsert or update stream: ${streamSubject}`)
   }
 
-  return result
+  return fromDocument(result)
 }
 
 export function createEventStore<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined>(
@@ -196,40 +191,6 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
   const mongoClient = new MongoClientWrapper(mongoClientOptions)
   const projections = configuredProjections || ([] as unknown as TProjections)
 
-  // Replica set elections interrupt the majority write concern of otherwise
-  // successful writes (e.g. InterruptedDueToReplStateChange). The ensure
-  // operations are idempotent, so retrying on stepdown-related codes is safe.
-  const TRANSIENT_WRITE_CODES = new Set([11602, 91, 189, 10107])
-  async function retryTransient<T>(op: () => Promise<T>): Promise<T> {
-    let lastError: unknown
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        return await op()
-      }
-      catch (error) {
-        if (!(error instanceof MongoServerError) || !TRANSIENT_WRITE_CODES.has(Number(error.code))) {
-          throw error
-        }
-        lastError = error
-      }
-    }
-    throw lastError
-  }
-
-  // Index creation is not allowed inside a transaction, so the unique index on
-  // streamSubject is ensured (once per collection) before appends start.
-  const ensuredCollections = new Map<string, Promise<unknown>>()
-  function ensureCollectionReady(collection: Collection<any>): Promise<unknown> {
-    const key = collection.collectionName
-    let ensured = ensuredCollections.get(key)
-    if (!ensured) {
-      ensured = retryTransient(() => collection.createIndex({ streamSubject: 1 }, { unique: true }))
-      ensured.catch(() => ensuredCollections.delete(key))
-      ensuredCollections.set(key, ensured)
-    }
-    return ensured
-  }
-
   const eventStore: EventStoreInstance<TProjections> = {
     getInstanceMongoClientWrapper(): MongoClientWrapper {
       return mongoClient
@@ -237,16 +198,16 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
 
     getCollectionBySubject<TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
       subject: Subject,
-    ): Collection<EventStream<TDomainEvent, TProjections>> {
+    ): Collection<StoredEventStream<TDomainEvent, TProjections>> {
       const collectionName = getCollectionNameFromSubject(subject)
-      return mongoClient.getDatabase().collection<EventStream<TDomainEvent, TProjections>>(collectionName)
+      return mongoClient.getDatabase().collection<StoredEventStream<TDomainEvent, TProjections>>(collectionName)
     },
 
     getCollectionByEntity<TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
       entity: string,
-    ): Collection<EventStream<TDomainEvent, TProjections>> {
+    ): Collection<StoredEventStream<TDomainEvent, TProjections>> {
       const collectionName = entity
-      return mongoClient.getDatabase().collection<EventStream<TDomainEvent, TProjections>>(collectionName)
+      return mongoClient.getDatabase().collection<StoredEventStream<TDomainEvent, TProjections>>(collectionName)
     },
 
     async getEventStreamBySubject<TDomainEvent extends AnyDomainEvent = AnyDomainEvent>(
@@ -255,12 +216,11 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
       const streamSubject = getStreamSubjectFromSubject(subject)
       const collection = this.getCollectionBySubject<TDomainEvent>(streamSubject)
       const filter = {
-        streamSubject: { $eq: streamSubject },
+        _id: { $eq: streamSubject },
       }
       const stream = await collection.findOne<
-        EventStream<TDomainEvent, TProjections>
+        StoredEventStream<TDomainEvent, TProjections>
       >(filter, {
-        projection: { _id: 0 },
         useBigInt64: true,
       })
       if (!stream) {
@@ -316,10 +276,6 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
           throw new MissingExpectedVersionError(streamSubject)
         }
         resolvedVersions.set(streamSubject, expected)
-      }
-
-      for (const streamSubject of eventGroups.keys()) {
-        await ensureCollectionReady(this.getCollectionBySubject(streamSubject))
       }
 
       const client = mongoClient.getClient()
