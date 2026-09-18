@@ -602,18 +602,33 @@ describe('mongoClientWrapper Integration Tests', () => {
     })
 
     it('should throw ConcurrencyError for no-stream when the stream already exists', async () => {
-      // Fresh instance: the shared store's ensure cache believes the unique
-      // index still exists, but afterEach dropped the collection with it.
-      const freshStore = createEventStore({ connectionString })
-      await freshStore.getInstanceMongoClientWrapper().waitForConnection()
+      await eventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
 
-      await freshStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
-
-      const append = freshStore.appendOrCreateStream([testEvent], {
+      const append = eventStore.appendOrCreateStream([testEvent], {
         expectedVersions: new Map([[streamSubject, 'no-stream' as const]]),
       })
 
       await expect(append).rejects.toThrowError(ConcurrencyError)
+    })
+
+    it('should let exactly one of two concurrent creates of the same stream succeed', async () => {
+      const first = createDomainEvent({ type: 'user.created', subject: subjectExisting, data: { name: 'first' } })
+      const second = createDomainEvent({ type: 'user.created', subject: subjectExisting, data: { name: 'second' } })
+      const expectedVersions = new Map([[streamSubject, 'no-stream' as const]])
+
+      const outcomes = await Promise.allSettled([
+        eventStore.appendOrCreateStream([first], { expectedVersions }),
+        eventStore.appendOrCreateStream([second], { expectedVersions }),
+      ])
+
+      const rejected = outcomes.filter((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected')
+      expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1)
+      expect(rejected).toHaveLength(1)
+      expect(rejected[0]!.reason).toBeInstanceOf(ConcurrencyError)
+
+      const { events, version } = await eventStore.getEventStreamBySubject(streamSubject)
+      expect(version).toBe(1)
+      expect(events).toHaveLength(1)
     })
 
     it('should create the stream when no-stream is expected and it does not exist', async () => {

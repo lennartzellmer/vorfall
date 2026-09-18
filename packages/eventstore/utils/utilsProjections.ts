@@ -10,7 +10,7 @@ import type {
   ProjectionQueryOptions,
   ProjectionStateOf,
 } from './utilsProjections.types'
-import { fromDocument } from '../eventStore/eventStreamDocument'
+import { bySubject, fromDocument } from '../eventStore/eventStreamDocument'
 import { transformFilterForNestedPath } from './utilsMongoFilter'
 
 /**
@@ -105,7 +105,7 @@ export async function findOneProjection<
   const collection = eventStore.getCollectionBySubject(streamSubject)
 
   const filters = [
-    { _id: { $eq: streamSubject } },
+    bySubject<AnyDomainEvent, TProjections>(streamSubject),
     { [`projections.${projectionName}`]: { $exists: true } },
   ]
 

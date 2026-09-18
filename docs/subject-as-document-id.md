@@ -1,6 +1,6 @@
 # Plan: the stream subject becomes the document `_id`
 
-Status: proposed, not started. Intended as its own PR after #17 merges.
+Status: implemented on `feat/subject-as-document-id`, stacked on #17.
 
 ## Decision
 

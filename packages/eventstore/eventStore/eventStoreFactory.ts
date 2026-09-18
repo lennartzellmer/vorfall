@@ -9,7 +9,7 @@ import { createEventStream, groupEventsByStreamSubject } from '../utils/utilsEve
 import { selectEventsForProjection, UnhandledProjectionEventError } from '../utils/utilsProjections'
 import { getCollectionNameFromSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject'
 import { ConcurrencyError, MissingExpectedVersionError } from './concurrencyError'
-import { fromDocument, toDocument } from './eventStreamDocument'
+import { bySubject, fromDocument, toDocument } from './eventStreamDocument'
 
 export interface EventStoreInstance<
   TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
@@ -82,8 +82,8 @@ async function processStreamInTransaction<
   else {
     const versionFilter: Filter<StoredEventStream<TDomainEvent, TProjections>>
       = typeof expectedVersion === 'number'
-        ? ({ _id: streamSubject, version: expectedVersion } as Filter<StoredEventStream<TDomainEvent, TProjections>>)
-        : ({ _id: streamSubject } as Filter<StoredEventStream<TDomainEvent, TProjections>>)
+        ? { ...bySubject<TDomainEvent, TProjections>(streamSubject), version: expectedVersion }
+        : bySubject(streamSubject)
 
     const updates: UpdateFilter<StoredEventStream<TDomainEvent, TProjections>> = {
       $setOnInsert: {
@@ -116,7 +116,7 @@ async function processStreamInTransaction<
 
     if (!result && typeof expectedVersion === 'number') {
       const actual = await collection.findOne(
-        { _id: streamSubject } as Filter<StoredEventStream<TDomainEvent, TProjections>>,
+        bySubject(streamSubject),
         { projection: { version: 1 }, ...(session && { session }) },
       )
       throw new ConcurrencyError(streamSubject, expectedVersion, actual?.version)
@@ -164,7 +164,7 @@ async function processStreamInTransaction<
     // configured projection folds leaves the document as written above.
     if (Object.keys(projectionUpdates).length > 0) {
       result = await collection.findOneAndUpdate(
-        { _id: streamSubject },
+        bySubject(streamSubject),
         projectionUpdates,
         {
           useBigInt64: true,
@@ -215,12 +215,9 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
     ): Promise<ReadStreamResult<TDomainEvent>> {
       const streamSubject = getStreamSubjectFromSubject(subject)
       const collection = this.getCollectionBySubject<TDomainEvent>(streamSubject)
-      const filter = {
-        _id: { $eq: streamSubject },
-      }
       const stream = await collection.findOne<
         StoredEventStream<TDomainEvent, TProjections>
-      >(filter, {
+      >(bySubject(streamSubject), {
         useBigInt64: true,
       })
       if (!stream) {
