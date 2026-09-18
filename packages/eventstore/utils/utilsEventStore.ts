@@ -93,7 +93,6 @@ export function createEventStream<
 
   const now = new Date()
   return {
-    streamId: randomUUID(),
     streamSubject,
     events,
     version: events.length,

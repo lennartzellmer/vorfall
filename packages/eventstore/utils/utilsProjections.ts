@@ -10,6 +10,7 @@ import type {
   ProjectionQueryOptions,
   ProjectionStateOf,
 } from './utilsProjections.types'
+import { bySubject, fromDocument } from '../eventStore/eventStreamDocument'
 import { transformFilterForNestedPath } from './utilsMongoFilter'
 
 /**
@@ -104,7 +105,7 @@ export async function findOneProjection<
   const collection = eventStore.getCollectionBySubject(streamSubject)
 
   const filters = [
-    { streamSubject: { $eq: streamSubject } },
+    bySubject<AnyDomainEvent, TProjections>(streamSubject),
     { [`projections.${projectionName}`]: { $exists: true } },
   ]
 
@@ -122,11 +123,15 @@ export async function findOneProjection<
     },
     {
       useBigInt64: true,
-      projection: { _id: 0 },
     },
   )
 
-  return result as EventStreamWithProjection<TProjections, TProjectionName> | null
+  if (!result) {
+    return null
+  }
+  // The `$exists` filter above guarantees the queried projection is present;
+  // that narrowing is not expressible through fromDocument's signature.
+  return fromDocument(result) as unknown as EventStreamWithProjection<TProjections, TProjectionName>
 }
 
 /**

@@ -20,7 +20,7 @@ Most event sourcing solutions are either too complex for simple use cases or lac
 ## Requirements
 
 - Node.js >= 20 (the package is ESM-only)
-- MongoDB running as a **replica set** — appends use multi-document transactions, which are not available on standalone servers
+- MongoDB 4.4 or later running as a **replica set** — appends use multi-document transactions, which are not available on standalone servers, and create a collection inside the transaction on the first append to a new entity
 
 ## Quick Start
 
@@ -174,6 +174,12 @@ yarn add vorfall
 - **Event Store** - One document per stream, holding its events and projection states (`createEventStore`, `appendOrCreateStream`, `getEventStreamBySubject`, `aggregateStream`)
 - **Projections** - Read models folded from events and persisted on the stream document on every append (`createProjectionDefinition`, `findOneProjection`, `findMultipleProjections`, `countProjections`)
 - **Commands** - Operations that may produce events (`createCommand`, `handleCommand`)
+
+## Storage Layout
+
+Each stream is one document in a collection named after its entity, keyed by the stream subject: the document `_id` of the stream `user/123` is the string `'user/123'`, in the `user` collection. The document holds the events, the version, timestamps and the projection states. There is no other identifier and no secondary index; the `_id` index is what makes a subject unique, and a concurrent create of the same subject fails with a `ConcurrencyError`.
+
+`getCollectionBySubject` and `getCollectionByEntity` hand out the stored shape (`StoredEventStream`), so a direct query filters on `_id`. `toDocument` and `fromDocument` translate between that shape and `EventStream`, which carries the subject under `streamSubject` and never an `_id`.
 
 ## Aggregates
 

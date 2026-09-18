@@ -12,7 +12,6 @@ export interface EventStream<
   TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
   P extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
 > {
-  streamId: string
   streamSubject: Subject
   events: Array<TDomainEvent>
   /** Number of events in the stream, used for optimistic concurrency checks */
@@ -25,6 +24,17 @@ export interface EventStream<
     ? ProjectionStates<P>
     : undefined
 }
+
+/**
+ * The stored shape of a stream: the stream subject is the document `_id`.
+ * `getCollectionBySubject` and `getCollectionByEntity` hand out collections
+ * of this shape; `toDocument`/`fromDocument` translate to and from
+ * `EventStream`.
+ */
+export type StoredEventStream<
+  TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
+  P extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
+> = Omit<EventStream<TDomainEvent, P>, 'streamSubject'> & { _id: Subject }
 
 /**
  * The result of a projection query: an event stream on which the projection
@@ -74,7 +84,6 @@ export interface ProjectionQuery<TProjectionName extends string> {
 export interface FindMultipleProjectionQuery<T extends Subject = Subject> {
   projectionName: string
   streamSubject: T
-  streamIds?: string[]
 }
 
 export interface MultiStreamAppendResult<
