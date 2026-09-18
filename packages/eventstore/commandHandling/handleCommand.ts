@@ -1,15 +1,17 @@
 import type { ExpectedStreamVersion } from '../eventStore/concurrencyError'
 import type { MultiStreamAppendResult } from '../eventStore/eventStoreFactory.types'
-import type { Subject } from '../types/domainEvent.types'
+import type { AnyDomainEvent, Subject } from '../types/domainEvent.types'
 import type { CommandHandlerOptions, DefaultRecord, InferDomainEventFromCommandHandler, StreamConfig } from './handleCommand.types'
 import { getStreamSubjectFromSubject } from '../utils/utilsSubject'
+
+type CommandHandlerResult = AnyDomainEvent | Array<AnyDomainEvent> | Promise<AnyDomainEvent | Array<AnyDomainEvent>>
 
 export async function handleCommand<
   Streams extends ReadonlyArray<StreamConfig<any, any>>,
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
   CommandMetadata extends DefaultRecord | undefined = undefined,
-  TCommandHandlerFunction extends (params: { command: any, states?: Map<Subject, any> }) => any = (params: { command: any, states?: Map<Subject, any> }) => any,
+  TCommandHandlerFunction extends (params: { command: any, states?: Map<Subject, any> }) => CommandHandlerResult = (params: { command: any, states?: Map<Subject, any> }) => CommandHandlerResult,
 >(
   options: CommandHandlerOptions<Streams, CommandType, CommandData, CommandMetadata, TCommandHandlerFunction>,
 ): Promise<MultiStreamAppendResult<InferDomainEventFromCommandHandler<TCommandHandlerFunction>, any>> {
@@ -42,8 +44,10 @@ export async function handleCommand<
    * and return the events to append to the stream
    */
   const result = await commandHandlerFunction({ command, states: aggregatedStreamStates })
-  const eventsToAppend: Array<InferDomainEventFromCommandHandler<TCommandHandlerFunction>>
-    = Array.isArray(result) ? result : [result]
+  // The constraint types result as AnyDomainEvent | Array<AnyDomainEvent>;
+  // the cast narrows to the concrete handler's inferred event union, which
+  // the compiler cannot connect to the generic on its own.
+  const eventsToAppend = (Array.isArray(result) ? result : [result]) as Array<InferDomainEventFromCommandHandler<TCommandHandlerFunction>>
 
   /**
    * Streams the handler emits to without having aggregated them carry no
