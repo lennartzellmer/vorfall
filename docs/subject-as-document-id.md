@@ -67,8 +67,8 @@ After, returned to callers (unchanged from today's type, minus `streamId`):
   `EventStoreInstance` signature:
 
   ```ts
-  export type StoredEventStream<TDomainEvent, P> =
-    Omit<EventStream<TDomainEvent, P>, 'streamSubject'> & { _id: Subject }
+  export type StoredEventStream<TDomainEvent, P>
+    = Omit<EventStream<TDomainEvent, P>, 'streamSubject'> & { _id: Subject }
   ```
 
 - Remove `streamIds` from `FindMultipleProjectionQuery`. The type itself is
