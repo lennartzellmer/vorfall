@@ -51,6 +51,21 @@ describe('createProjectionDefinition', () => {
     expect(projectionDefinition.entity).toBe('test')
     expect(projectionDefinition.canHandle).toBeUndefined()
   })
+
+  it('should keep canHandle when entity is present but undefined', () => {
+    type TestEvent = DomainEvent<'test.eventOne', { value: string }, undefined>
+
+    const projectionDefinition = createProjectionDefinition({
+      name: 'testProjection',
+      canHandle: ['test.eventOne'],
+      entity: undefined,
+      evolve: (state: { value: string } | null, event: TestEvent) => ({ value: event.data.value }),
+      initialState: () => ({ value: '' }),
+    })
+
+    expect(projectionDefinition.canHandle).toEqual(['test.eventOne'])
+    expect(projectionDefinition.entity).toBeUndefined()
+  })
 })
 
 describe('selectEventsForProjection', () => {

@@ -4,7 +4,7 @@ import { CloudEvent } from 'cloudevents'
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createDomainEvent, createEventStream } from '../utils/utilsEventStore'
-import { createProjectionDefinition } from '../utils/utilsProjections'
+import { createProjectionDefinition, UnhandledProjectionEventError } from '../utils/utilsProjections'
 import { createSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject'
 import { ConcurrencyError, MissingExpectedVersionError } from './concurrencyError'
 import { createEventStore } from './eventStoreFactory'
@@ -211,6 +211,38 @@ describe('mongoClientWrapper Integration Tests', () => {
       const result = await testeventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
 
       expect(result.streams[0]?.projections?.TestProjection).toBeUndefined()
+    })
+    it('should fail the append when an entity projection has no case for an event type', async () => {
+      type UserCreated = DomainEvent<'user.created', { name: string, email: string }>
+      const projectionDefinition = createProjectionDefinition({
+        name: 'TestProjection',
+        entity: 'user',
+        evolve: (state: { count: number } | null, event: UserCreated) => {
+          switch (event.type) {
+            case 'user.created':
+              return { count: (state?.count ?? 0) + 1 }
+          }
+        },
+        initialState: () => ({ count: 0 }),
+      })
+
+      const testeventStore = createEventStore({ connectionString, projections: [projectionDefinition] })
+      await testeventStore.getInstanceMongoClientWrapper().waitForConnection()
+      await testeventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
+
+      const unhandledEvent = createDomainEvent({
+        type: 'user.avatarUploaded',
+        subject: subjectExisting,
+        data: { url: 'https://example.com/avatar.png' },
+      })
+      const append = testeventStore.appendOrCreateStream([unhandledEvent], { expectedVersions: 'any' })
+
+      await expect(append).rejects.toBeInstanceOf(UnhandledProjectionEventError)
+      await expect(append).rejects.toMatchObject({ projectionName: 'TestProjection', eventType: 'user.avatarUploaded' })
+      // The failed fold aborts the transaction: the event was not appended either.
+      const stream = await testeventStore.getEventStreamBySubject(subjectExisting)
+      expect(stream.version).toBe(1)
+      expect(stream.events.map(event => event.type)).toEqual(['user.created'])
     })
     it('should update an already existing projection', async () => {
       const projectionDefinition = createProjectionDefinition({

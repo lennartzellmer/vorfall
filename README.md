@@ -192,7 +192,7 @@ user.stream('123') // { evolve, initialState, streamSubject: 'user/123' } for ha
 user.projection // for createEventStore({ projections: [user.projection] })
 ```
 
-The aggregate's projection is selected by entity, not by event type: it folds every event of every stream under `user/`. `evolve` is therefore the only place that lists the aggregate's event types, and an exhaustive `switch` in it is all the completeness check you need. A projection selected by `canHandle` remains the right tool when it deliberately observes a subset of events, possibly across entities:
+The aggregate's projection is selected by entity, not by event type: it folds every event of every stream under `user/`. `evolve` is therefore the only place that lists the aggregate's event types. An exhaustive `switch` in it is the completeness check at compile time; at runtime, an event whose type `evolve` has no case for fails the append with an `UnhandledProjectionEventError` instead of leaving the projection silently stale. A projection selected by `canHandle` remains the right tool when it deliberately observes a subset of events, possibly across entities:
 
 ```typescript
 const registrations = createProjectionDefinition({

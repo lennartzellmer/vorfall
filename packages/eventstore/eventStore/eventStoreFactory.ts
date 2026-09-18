@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { MongoServerError } from 'mongodb'
 import { MongoClientWrapper } from '../mongoClient/mongoClientWrapper'
 import { createEventStream, groupEventsByStreamSubject } from '../utils/utilsEventStore'
-import { selectEventsForProjection } from '../utils/utilsProjections'
+import { selectEventsForProjection, UnhandledProjectionEventError } from '../utils/utilsProjections'
 import { getCollectionNameFromSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject'
 import { ConcurrencyError, MissingExpectedVersionError } from './concurrencyError'
 
@@ -137,10 +137,15 @@ async function processStreamInTransaction<
         continue
       }
 
-      const state = handledEvents.reduce(
-        (state, event) => projection.evolve(state, event),
-        result?.projections?.[projection.name] ?? projection.initialState(),
-      )
+      let state = result?.projections?.[projection.name] ?? projection.initialState()
+      for (const event of handledEvents) {
+        state = projection.evolve(state, event)
+        // undefined means evolve has no case for this event type; failing the
+        // append here keeps the projection from going silently stale.
+        if (state === undefined) {
+          throw new UnhandledProjectionEventError(projection.name, event.type)
+        }
+      }
 
       if (state === null) {
         unsetUpdates[`projections.${projection.name}`] = ''

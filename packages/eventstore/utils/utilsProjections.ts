@@ -3,7 +3,8 @@ import type { EventStreamWithProjection, ProjectionQuery } from '../eventStore/e
 import type { AnyDomainEvent, Brand, DefaultRecord, Subject } from '../types/index'
 import type {
   AnyProjectionDefinition,
-  CanHandle,
+  EntitySelection,
+  EventTypeSelection,
   ProjectionDefinition,
   ProjectionNames,
   ProjectionQueryOptions,
@@ -34,13 +35,31 @@ export function createProjectionDefinition<
   name: TName
   evolve: (state: TState | null, event: TEvent) => TState | null
   initialState: () => TState | null
-} & ({ canHandle: CanHandle<TEvent> } | { entity: string })): ProjectionDefinition<TState, TName, TEvent> {
+} & (EventTypeSelection<TEvent> | EntitySelection)): ProjectionDefinition<TState, TName, TEvent> {
   const { name, evolve, initialState } = config
 
-  if ('entity' in config) {
+  // Same discriminant as selectEventsForProjection: an explicit
+  // `entity: undefined` (e.g. from a spread config) is a canHandle selection.
+  if (config.entity !== undefined) {
     return { name, evolve, initialState, entity: config.entity }
   }
   return { name, evolve, initialState, canHandle: config.canHandle }
+}
+
+/**
+ * Thrown when a projection's `evolve` returns `undefined` for an event, which
+ * means it has no case for that event type. An entity-selected projection
+ * receives every event of its streams, so a type missing from `evolve` would
+ * otherwise leave the projection silently stale.
+ */
+export class UnhandledProjectionEventError extends Error {
+  constructor(
+    public readonly projectionName: string,
+    public readonly eventType: string,
+  ) {
+    super(`Projection "${projectionName}" returned undefined for event type "${eventType}"; evolve must return a state or null for every event it receives`)
+    this.name = 'UnhandledProjectionEventError'
+  }
 }
 
 /**
