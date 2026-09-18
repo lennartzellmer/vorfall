@@ -1,5 +1,6 @@
 import type { EventStream } from '../eventStore/eventStoreFactory.types'
 import type { AnyDomainEvent, DefaultRecord, DomainEvent, Subject } from '../types/index'
+import type { ProjectionDefinition } from './utilsProjections.types'
 import type { StreamSubjectFromSubject } from './utilsSubject'
 import { randomUUID } from 'node:crypto'
 import { CloudEvent } from 'cloudevents'
@@ -74,9 +75,12 @@ export function createDomainEvent<
  * @param events The array of DomainEvents to create the EventStream from
  * @returns An EventStream containing the provided events
  */
-export function createEventStream<TDomainEvent extends AnyDomainEvent>(
+export function createEventStream<
+  TDomainEvent extends AnyDomainEvent,
+  TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
+>(
   events: Array<TDomainEvent>,
-): EventStream<TDomainEvent> {
+): EventStream<TDomainEvent, TProjections> {
   const firstEvent = events[0]
 
   if (!firstEvent) {
@@ -87,15 +91,16 @@ export function createEventStream<TDomainEvent extends AnyDomainEvent>(
 
   const streamSubject = getStreamSubjectFromSubject(subject)
 
+  const now = new Date()
   return {
     streamId: randomUUID(),
     streamSubject,
     events,
+    version: events.length,
     metadata: {
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
     },
-    projections: undefined,
   }
 }
 

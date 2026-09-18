@@ -94,7 +94,9 @@ async function registerUser(userId: string, email: string, name: string) {
     data: { userId, email, name },
   })
 
-  await eventStore.appendOrCreateStream([event])
+  // 'any' deliberately opts out of the concurrency check — see
+  // Optimistic Concurrency Control below.
+  await eventStore.appendOrCreateStream([event], { expectedVersions: 'any' })
 }
 
 // Query the projection maintained for a stream
@@ -109,15 +111,45 @@ async function getUserProfile(userId: string) {
 
 // Or rebuild state directly from the events
 async function getUserState(userId: string) {
-  return eventStore.aggregateStream<UserProfile | null, UserEvent>(
+  const { state, version, streamExists } = await eventStore.aggregateStream<UserProfile | null, UserEvent>(
     createSubject(`user/${userId}`),
     {
       initialState: () => null,
       evolve: (state, event) => userProfileProjection.evolve(state, event),
     },
   )
+  return state
 }
 ```
+
+## Optimistic Concurrency Control
+
+Every stream document carries a `version` (the number of events in the stream). `aggregateStream` and `getEventStreamBySubject` return the version seen at read time; pass it back on append to make the write fail if the stream changed in between:
+
+```typescript
+import { ConcurrencyError } from 'vorfall'
+
+const { state, version } = await eventStore.aggregateStream(streamSubject, { evolve, initialState })
+
+try {
+  await eventStore.appendOrCreateStream([event], {
+    expectedVersions: new Map([[streamSubject, version]]),
+  })
+}
+catch (error) {
+  if (error instanceof ConcurrencyError) {
+    // Someone else appended first: error.expectedVersion vs. error.actualVersion.
+    // Re-read, re-decide, retry — or surface e.g. HTTP 409.
+  }
+  throw error
+}
+```
+
+Expected versions per stream subject can be a number (exact event count, `0` means the stream must not exist yet), `'no-stream'` (append must create the stream) or `'any'` (no check). On a mismatch the whole append is rolled back, including all other streams in the same call.
+
+Checking is the default: `expectedVersions` is required, and when it is a map, every stream in the append must be listed — a missing entry throws `MissingExpectedVersionError` before anything is written. Opting out is always explicit: list a stream with `'any'`, or pass `expectedVersions: 'any'` to skip the check for the whole append (e.g. order-insensitive logs or imports where no decision depends on prior state).
+
+`handleCommand` wires this automatically: the versions observed while aggregating the configured streams are enforced on append, so a concurrent command on the same stream fails with a `ConcurrencyError` instead of silently interleaving.
 
 ## Installation
 

@@ -13,6 +13,7 @@
   ],
   "exclude": [
     "**/*.test.ts",
+    "**/*.test-d.ts",
     "dist",
     "node_modules"
   ]
