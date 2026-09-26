@@ -76,6 +76,15 @@ export async function handleCommand<
   const eventsToAppend: Array<TDomainEvent> = Array.isArray(result) ? result : [result]
 
   /**
+   * An empty result means the handler decided there is nothing to record:
+   * the command is already satisfied by the current state. Nothing is
+   * appended and no version is checked, since no stream is touched.
+   */
+  if (eventsToAppend.length === 0) {
+    return { streams: [], totalEventsAppended: 0, streamSubjects: [] }
+  }
+
+  /**
    * Streams the handler emits to without having aggregated them carry no
    * version claim: the decision was not based on their state, so there is
    * no stale read to guard against.

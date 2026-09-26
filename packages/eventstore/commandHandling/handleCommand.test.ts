@@ -447,6 +447,68 @@ describe('handleCommand', () => {
     expect(result).toBe(mockedNewState)
   })
 
+  it('should append nothing when the handler returns an empty array', async () => {
+    const mockEventStore = {
+      aggregateStream: vi.fn(),
+      appendOrCreateStream: vi.fn(),
+    } as MockedObject<EventStoreInstance>
+
+    const streamSubject = createStreamSubject('test/noop')
+
+    type CounterIncrementedEvent = DomainEvent<'counter.incremented', { incrementedBy: number }>
+
+    interface AggregatedState {
+      counter: number
+    }
+
+    const evolve = (state: AggregatedState, event: CounterIncrementedEvent) => ({
+      ...state,
+      counter: state.counter + event.data.incrementedBy,
+    })
+    const initialState = () => ({ counter: 0 })
+
+    mockEventStore.aggregateStream.mockResolvedValue({ state: { counter: 42 }, streamExists: true, version: 3 })
+
+    type SetCounterCommand = Command<'SetCounter', { to: number }>
+    const setCounterCommand: SetCounterCommand = createCommand({
+      type: 'SetCounter',
+      data: { to: 42 },
+    })
+
+    // The handler finds the state already matches the command and records nothing.
+    const commandHandlerFunction = vi.fn(
+      ({ command, states }: {
+        command: SetCounterCommand
+        states?: Map<Subject, AggregatedState>
+      }): CounterIncrementedEvent[] => {
+        const state = states!.get(streamSubject)!
+        if (state.counter === command.data.to) {
+          return []
+        }
+        return [createDomainEvent({
+          type: 'counter.incremented',
+          subject: streamSubject,
+          data: { incrementedBy: command.data.to - state.counter },
+        })]
+      },
+    )
+
+    const result = await handleCommand({
+      streams: [{
+        evolve,
+        initialState,
+        streamSubject,
+      }],
+      eventStore: mockEventStore,
+      commandHandlerFunction,
+      command: setCounterCommand,
+    })
+
+    expect(commandHandlerFunction).toHaveBeenCalledWith({ command: setCounterCommand, states: expect.any(Map) })
+    expect(mockEventStore.appendOrCreateStream).not.toHaveBeenCalled()
+    expect(result).toEqual({ streams: [], totalEventsAppended: 0, streamSubjects: [] })
+  })
+
   it('should reject with StreamNotLoadedError when the handler reads a stream that is not listed', async () => {
     const mockEventStore = {
       aggregateStream: vi.fn().mockResolvedValue({ state: null, streamExists: false, version: 0 }),
