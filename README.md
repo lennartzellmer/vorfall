@@ -242,6 +242,19 @@ await handleCommand({
 })
 ```
 
+A handler that finds the command already satisfied by the current state returns an empty array. `handleCommand` then appends nothing and resolves with `totalEventsAppended: 0`, so an idempotent command needs no sentinel error:
+
+```typescript
+function changeEmail({ command, states }) {
+  const subject = createSubject(`user/${command.data.userId}`)
+  const user = states.get(subject)
+  if (user?.email === command.data.email) {
+    return [] // nothing changed, nothing to record
+  }
+  return createDomainEvent({ type: 'user.emailChanged' as const, subject, data: { email: command.data.email } })
+}
+```
+
 ## Development Setup
 
 To contribute to this project:
