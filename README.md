@@ -150,7 +150,34 @@ Expected versions per stream subject can be a number (exact event count, `0` mea
 
 Checking is the default: `expectedVersions` is required, and when it is a map, every stream in the append must be listed — a missing entry throws `MissingExpectedVersionError` before anything is written. Opting out is always explicit: list a stream with `'any'`, or pass `expectedVersions: 'any'` to skip the check for the whole append (e.g. order-insensitive logs or imports where no decision depends on prior state).
 
-`handleCommand` wires this automatically: the versions observed while aggregating the configured streams are enforced on append, so a concurrent command on the same stream fails with a `ConcurrencyError` instead of silently interleaving.
+`handleCommand` wires this automatically: the versions observed while aggregating the configured streams are enforced on append, so a concurrent command on the same stream cannot silently interleave.
+
+### Retrying commands on conflict
+
+When the append fails with a `ConcurrencyError`, `handleCommand` runs the whole cycle again: it aggregates every listed stream anew, calls the handler with the fresh states and appends the new result. The decision of the stale attempt is discarded, never re-appended. This is safe as a default because the expected versions come only from `handleCommand`'s own reads: a conflict can only mean another writer got in between, and the retry decides as if the command had arrived a moment later.
+
+- **Defaults:** 3 retries (4 attempts). Before retry *n* it waits a random delay between 0 and `min(maxDelayMs, baseDelayMs * 2^(n-1))`, with `baseDelayMs` 20 and `maxDelayMs` 200. The jitter keeps two colliding commands from colliding again in lockstep.
+- **Only conflicts are retried.** Errors thrown by the handler, `StreamNotLoadedError` and every other error reject immediately.
+- **When retries run out**, the last `ConcurrencyError` is rethrown unchanged, so mapping it to e.g. HTTP 409 keeps working.
+
+```typescript
+await handleCommand({
+  eventStore,
+  streams,
+  command,
+  commandHandlerFunction,
+  retry: {
+    maxRetries: 5, // missing fields keep their default
+    onRetry: ({ error, attempt, delayMs }) => logger.warn({ error, attempt, delayMs }, 'command conflict, retrying'),
+  },
+})
+
+await handleCommand({ eventStore, streams, command, commandHandlerFunction, retry: false }) // fail on the first conflict
+```
+
+**The handler may run more than once.** It must be a pure function of `command` and `states`: no emails, uploads or other external I/O inside it. Values that must stay stable across attempts, such as generated IDs or timestamps, belong in the command data. If the retried decision finds the command already satisfied, the handler can return `[]` and the command ends as a no-op (see [CQRS Pattern Support](#cqrs-pattern-support)).
+
+This is separate from the MongoDB driver's own retry: `session.withTransaction` re-runs the append transaction on transient errors (`TransientTransactionError`, `UnknownTransactionCommitResult`) with the *same* expected versions. If a competing write committed in the meantime, that ends in a `ConcurrencyError`, which `handleCommand` then retries with a fresh read.
 
 The `states` map handed to the command handler contains one entry per listed stream, with the initial state for streams that do not exist yet. Reading a subject that was not listed throws a `StreamNotLoadedError`, so a wiring mistake in the caller is not mistaken for a missing stream.
 
