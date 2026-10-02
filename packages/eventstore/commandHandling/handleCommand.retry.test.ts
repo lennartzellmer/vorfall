@@ -28,6 +28,14 @@ function incremented(by: number): CounterIncremented {
   return createDomainEvent({ type: 'counter.incremented', subject: streamSubject, data: { by } })
 }
 
+function setCounter(to: number): SetCommand {
+  return createCommand({ type: 'SetCounter', data: { to } })
+}
+
+function incrementCounter(by: number): IncrementCommand {
+  return createCommand({ type: 'IncrementCounter', data: { by } })
+}
+
 function counterState(states: Map<Subject, CounterState> | undefined): CounterState {
   return states!.get(streamSubject)!
 }
@@ -78,7 +86,7 @@ describe('handleCommand retry on ConcurrencyError', () => {
     const result = await handleCommand({
       eventStore,
       streams: [counterStream],
-      command: createCommand({ type: 'SetCounter', data: { to: 100 } }),
+      command: setCounter(100),
       commandHandlerFunction,
       retry: noDelay,
     })
@@ -106,7 +114,7 @@ describe('handleCommand retry on ConcurrencyError', () => {
     const result = await handleCommand({
       eventStore,
       streams: [counterStream],
-      command: createCommand({ type: 'SetCounter', data: { to: 5 } }),
+      command: setCounter(5),
       commandHandlerFunction,
       retry: noDelay,
     })
@@ -121,7 +129,7 @@ describe('handleCommand retry on ConcurrencyError', () => {
     const increment = (by: number) => handleCommand({
       eventStore,
       streams: [counterStream],
-      command: createCommand({ type: 'IncrementCounter', data: { by } }),
+      command: incrementCounter(by),
       commandHandlerFunction: ({ command }: { command: IncrementCommand }) => incremented(command.data.by),
     })
 
@@ -144,7 +152,7 @@ describe('handleCommand retry on ConcurrencyError', () => {
     const handled = handleCommand({
       eventStore,
       streams: [counterStream],
-      command: createCommand({ type: 'IncrementCounter', data: { by: 1 } }),
+      command: incrementCounter(1),
       commandHandlerFunction,
       retry: { ...noDelay, maxRetries: 2, onRetry: info => retries.push(info) },
     })
@@ -164,7 +172,7 @@ describe('handleCommand retry on ConcurrencyError', () => {
     const handled = handleCommand({
       eventStore,
       streams: [counterStream],
-      command: createCommand({ type: 'IncrementCounter', data: { by: 1 } }),
+      command: incrementCounter(1),
       commandHandlerFunction,
     })
 
@@ -181,7 +189,7 @@ describe('handleCommand retry on ConcurrencyError', () => {
     const handled = handleCommand({
       eventStore,
       streams: [counterStream],
-      command: createCommand({ type: 'IncrementCounter', data: { by: 1 } }),
+      command: incrementCounter(1),
       commandHandlerFunction,
       retry: false,
     })
@@ -197,7 +205,7 @@ describe('handleCommand retry on ConcurrencyError', () => {
     const handled = handleCommand({
       eventStore,
       streams: [counterStream],
-      command: createCommand({ type: 'IncrementCounter', data: { by: 1 } }),
+      command: incrementCounter(1),
       commandHandlerFunction: async () => {
         await competingAppend(1)
         return incremented(1)
@@ -217,7 +225,7 @@ describe('handleCommand retry on ConcurrencyError', () => {
     const handled = handleCommand({
       eventStore,
       streams: [counterStream],
-      command: createCommand({ type: 'IncrementCounter', data: { by: 1 } }),
+      command: incrementCounter(1),
       commandHandlerFunction,
       retry: { maxRetries: -1 },
     })

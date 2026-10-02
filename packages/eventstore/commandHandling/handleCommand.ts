@@ -33,11 +33,16 @@ class LoadedStreamStates extends Map<Subject, any> {
   }
 }
 
-type RetryPolicy = Required<Omit<CommandRetryOptions, 'onRetry'>> & Pick<CommandRetryOptions, 'onRetry'>
+interface RetryPolicy {
+  maxRetries: number
+  baseDelayMs: number
+  maxDelayMs: number
+  onRetry: CommandRetryOptions['onRetry'] | undefined
+}
 
 function resolveRetryPolicy(retry: false | CommandRetryOptions = {}): RetryPolicy {
   const policy: RetryPolicy = retry === false
-    ? { maxRetries: 0, baseDelayMs: 0, maxDelayMs: 0 }
+    ? { maxRetries: 0, baseDelayMs: 0, maxDelayMs: 0, onRetry: undefined }
     : {
         maxRetries: retry.maxRetries ?? 3,
         baseDelayMs: retry.baseDelayMs ?? 20,
