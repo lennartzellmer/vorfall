@@ -1,3 +1,4 @@
+import type { ConcurrencyError } from '../eventStore/concurrencyError'
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
 import type { AnyDomainEvent, Command, DefaultRecord, Subject } from '../types/index'
 
@@ -29,7 +30,38 @@ export interface CommandHandlerOptions<
   eventStore: EventStoreInstance<any>
   streams: Streams
   command: Command<CommandType, CommandData, CommandMetadata>
+  /**
+   * Decides which events to record for the command. It may run more than
+   * once (see `retry`), so it must be a pure function of `command` and
+   * `states`: no side effects, and values that have to stay stable across
+   * attempts (IDs, timestamps) belong in the command data.
+   */
   commandHandlerFunction: CommandHandlerFunction<Streams, CommandType, CommandData, CommandMetadata, TDomainEvent>
+  /**
+   * Retries the whole cycle (aggregate, decide, append) when the append fails
+   * with a `ConcurrencyError`. On by default; `false` disables it.
+   */
+  retry?: false | CommandRetryOptions
+}
+
+export interface CommandRetryInfo {
+  /** The conflict that ended the attempt. */
+  error: ConcurrencyError
+  /** The attempt that just failed, starting at 1. */
+  attempt: number
+  /** How long `handleCommand` waits before the next attempt. */
+  delayMs: number
+}
+
+export interface CommandRetryOptions {
+  /** Retries after the first attempt. Default 3, i.e. up to 4 attempts. */
+  maxRetries?: number
+  /** Upper bound of the delay before the first retry; doubles per retry. Default 20 ms. */
+  baseDelayMs?: number
+  /** Cap for the delay bound. Default 200 ms. */
+  maxDelayMs?: number
+  /** Called before each retry, e.g. for logging. */
+  onRetry?: (info: CommandRetryInfo) => void
 }
 
 // Helper type to extract state types from streams array
