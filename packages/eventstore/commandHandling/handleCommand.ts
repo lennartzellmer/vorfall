@@ -2,7 +2,8 @@ import type { ExpectedStreamVersion } from '../eventStore/concurrencyError'
 import type { MultiStreamAppendResult } from '../eventStore/eventStoreFactory.types'
 import type { AnyDomainEvent, Subject } from '../types/domainEvent.types'
 import type { DefaultRecord } from '../types/index'
-import type { CommandHandlerOptions, CreateStatesMap, StreamConfig } from './handleCommand.types'
+import type { CommandHandlerOptions, CommandRetryOptions, CreateStatesMap, StreamConfig } from './handleCommand.types'
+import { ConcurrencyError } from '../eventStore/concurrencyError'
 import { getStreamSubjectFromSubject } from '../utils/utilsSubject'
 
 /**
@@ -32,6 +33,52 @@ class LoadedStreamStates extends Map<Subject, any> {
   }
 }
 
+interface RetryPolicy {
+  maxRetries: number
+  baseDelayMs: number
+  maxDelayMs: number
+  onRetry: CommandRetryOptions['onRetry'] | undefined
+}
+
+/**
+ * Conflicts resolve within milliseconds here, so the delays stay small;
+ * a handful of retries covers bursts of commands on the same stream.
+ */
+const DEFAULT_RETRY_POLICY: RetryPolicy = {
+  maxRetries: 3,
+  baseDelayMs: 20,
+  maxDelayMs: 200,
+  onRetry: undefined,
+}
+
+/**
+ * Fills missing fields with the defaults. `retry: false` is simply a policy
+ * with zero retries, so the loop in handleCommand needs no special case.
+ */
+function resolveRetryPolicy(retry: false | CommandRetryOptions = {}): RetryPolicy {
+  const policy: RetryPolicy = retry === false
+    ? { ...DEFAULT_RETRY_POLICY, maxRetries: 0 }
+    : {
+        maxRetries: retry.maxRetries ?? DEFAULT_RETRY_POLICY.maxRetries,
+        baseDelayMs: retry.baseDelayMs ?? DEFAULT_RETRY_POLICY.baseDelayMs,
+        maxDelayMs: retry.maxDelayMs ?? DEFAULT_RETRY_POLICY.maxDelayMs,
+        onRetry: retry.onRetry,
+      }
+  for (const key of ['maxRetries', 'baseDelayMs', 'maxDelayMs'] as const) {
+    if (!Number.isInteger(policy[key]) || policy[key] < 0) {
+      throw new RangeError(`retry.${key} must be a non-negative integer, got ${policy[key]}`)
+    }
+  }
+  return policy
+}
+
+/**
+ * Runs the command and appends its events. A `ConcurrencyError` from the
+ * append is retried by running the whole cycle again (see `retry`): the
+ * expected versions come only from this function's own reads, so a conflict
+ * can only mean another writer got in between, and a new attempt decides
+ * against the current state as if the command had arrived a moment later.
+ */
 export async function handleCommand<
   Streams extends ReadonlyArray<StreamConfig<any, any>>,
   CommandType extends string,
@@ -41,6 +88,42 @@ export async function handleCommand<
 >(
   options: CommandHandlerOptions<Streams, CommandType, CommandData, CommandMetadata, TDomainEvent>,
 ): Promise<MultiStreamAppendResult<TDomainEvent, any>> {
+  const { maxRetries, baseDelayMs, maxDelayMs, onRetry } = resolveRetryPolicy(options.retry)
+
+  for (let attempt = 1; ; attempt++) {
+    const outcome = await attemptCommand(options)
+    if (!('conflict' in outcome)) {
+      return outcome.result
+    }
+    if (attempt > maxRetries) {
+      throw outcome.conflict
+    }
+    // Full jitter: a random delay up to an exponentially growing bound, so
+    // two colliding commands do not collide again in lockstep.
+    const delayMs = Math.floor(Math.random() * Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1)))
+    onRetry?.({ error: outcome.conflict, attempt, delayMs })
+    await new Promise(resolve => setTimeout(resolve, delayMs))
+  }
+}
+
+/**
+ * A conflict on append is reported as an outcome rather than thrown, so
+ * that only the append's own ConcurrencyError is retried: one thrown by the
+ * handler is a handler error like any other and rejects immediately.
+ */
+type AttemptOutcome<TDomainEvent extends AnyDomainEvent>
+  = | { result: MultiStreamAppendResult<TDomainEvent, any> }
+    | { conflict: ConcurrencyError }
+
+async function attemptCommand<
+  Streams extends ReadonlyArray<StreamConfig<any, any>>,
+  CommandType extends string,
+  CommandData extends DefaultRecord | undefined,
+  CommandMetadata extends DefaultRecord | undefined,
+  TDomainEvent extends AnyDomainEvent,
+>(
+  options: CommandHandlerOptions<Streams, CommandType, CommandData, CommandMetadata, TDomainEvent>,
+): Promise<AttemptOutcome<TDomainEvent>> {
   const {
     eventStore,
     streams,
@@ -81,7 +164,7 @@ export async function handleCommand<
    * appended and no version is checked, since no stream is touched.
    */
   if (eventsToAppend.length === 0) {
-    return { streams: [], totalEventsAppended: 0, streamSubjects: [] }
+    return { result: { streams: [], totalEventsAppended: 0, streamSubjects: [] } }
   }
 
   /**
@@ -96,10 +179,13 @@ export async function handleCommand<
     }
   }
 
-  const newState = await eventStore.appendOrCreateStream<TDomainEvent>(
-    eventsToAppend,
-    { expectedVersions },
-  )
-
-  return newState
+  try {
+    return { result: await eventStore.appendOrCreateStream<TDomainEvent>(eventsToAppend, { expectedVersions }) }
+  }
+  catch (error) {
+    if (error instanceof ConcurrencyError) {
+      return { conflict: error }
+    }
+    throw error
+  }
 }

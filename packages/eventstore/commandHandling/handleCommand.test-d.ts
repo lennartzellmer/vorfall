@@ -101,3 +101,16 @@ test('rejects a handler that does not return domain events', () => {
     commandHandlerFunction: () => 'not an event',
   })
 })
+
+test('accepts retry options or false, but not true', () => {
+  void handleCommand({ eventStore, command, streams, commandHandlerFunction: () => counterEvent, retry: false })
+  void handleCommand({
+    eventStore,
+    command,
+    streams,
+    commandHandlerFunction: () => counterEvent,
+    retry: { maxRetries: 1, onRetry: ({ error, attempt, delayMs }) => void [error.streamSubject, attempt, delayMs] },
+  })
+  // @ts-expect-error - retrying is the default; only false or options are meaningful
+  void handleCommand({ eventStore, command, streams, commandHandlerFunction: () => counterEvent, retry: true })
+})
