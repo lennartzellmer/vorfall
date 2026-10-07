@@ -54,6 +54,7 @@ describe('handleCommand retry on ConcurrencyError', () => {
   })
 
   afterEach(async () => {
+    vi.restoreAllMocks()
     const db = eventStore.getInstanceMongoClientWrapper().getDatabase()
     for (const collection of await db.collections()) {
       await collection.drop()
@@ -180,6 +181,23 @@ describe('handleCommand retry on ConcurrencyError', () => {
     expect(commandHandlerFunction).toHaveBeenCalledTimes(1)
   })
 
+  it('should not retry a ConcurrencyError thrown by the handler itself', async () => {
+    const commandHandlerFunction = vi.fn(() => {
+      throw new ConcurrencyError(streamSubject, 7, 8)
+    })
+
+    const handled = handleCommand({
+      eventStore,
+      streams: [counterStream],
+      command: incrementCounter(1),
+      commandHandlerFunction,
+      retry: noDelay,
+    })
+
+    await expect(handled).rejects.toMatchObject({ expectedVersion: 7, actualVersion: 8 })
+    expect(commandHandlerFunction).toHaveBeenCalledTimes(1)
+  })
+
   it('should not retry with retry: false', async () => {
     const commandHandlerFunction = vi.fn(async () => {
       await competingAppend(1)
@@ -216,7 +234,6 @@ describe('handleCommand retry on ConcurrencyError', () => {
     await expect(handled).rejects.toBeInstanceOf(ConcurrencyError)
     // Bounds 10, 20, 40, 50 (capped), halved by the mocked random.
     expect(delays).toEqual([5, 10, 20, 25])
-    vi.restoreAllMocks()
   })
 
   it('should reject invalid retry options before touching the store', async () => {

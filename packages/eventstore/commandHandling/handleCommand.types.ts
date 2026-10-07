@@ -60,7 +60,10 @@ export interface CommandRetryOptions {
   baseDelayMs?: number
   /** Cap for the delay bound. Default 200 ms. */
   maxDelayMs?: number
-  /** Called before each retry, e.g. for logging. */
+  /**
+   * Called before each retry, e.g. for logging. An exception thrown here
+   * rejects `handleCommand` with that exception instead of retrying.
+   */
   onRetry?: (info: CommandRetryInfo) => void
 }
 

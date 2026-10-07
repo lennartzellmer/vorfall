@@ -40,13 +40,28 @@ interface RetryPolicy {
   onRetry: CommandRetryOptions['onRetry'] | undefined
 }
 
+/**
+ * Conflicts resolve within milliseconds here, so the delays stay small;
+ * a handful of retries covers bursts of commands on the same stream.
+ */
+const DEFAULT_RETRY_POLICY: RetryPolicy = {
+  maxRetries: 3,
+  baseDelayMs: 20,
+  maxDelayMs: 200,
+  onRetry: undefined,
+}
+
+/**
+ * Fills missing fields with the defaults. `retry: false` is simply a policy
+ * with zero retries, so the loop in handleCommand needs no special case.
+ */
 function resolveRetryPolicy(retry: false | CommandRetryOptions = {}): RetryPolicy {
   const policy: RetryPolicy = retry === false
-    ? { maxRetries: 0, baseDelayMs: 0, maxDelayMs: 0, onRetry: undefined }
+    ? { ...DEFAULT_RETRY_POLICY, maxRetries: 0 }
     : {
-        maxRetries: retry.maxRetries ?? 3,
-        baseDelayMs: retry.baseDelayMs ?? 20,
-        maxDelayMs: retry.maxDelayMs ?? 200,
+        maxRetries: retry.maxRetries ?? DEFAULT_RETRY_POLICY.maxRetries,
+        baseDelayMs: retry.baseDelayMs ?? DEFAULT_RETRY_POLICY.baseDelayMs,
+        maxDelayMs: retry.maxDelayMs ?? DEFAULT_RETRY_POLICY.maxDelayMs,
         onRetry: retry.onRetry,
       }
   for (const key of ['maxRetries', 'baseDelayMs', 'maxDelayMs'] as const) {
@@ -76,23 +91,31 @@ export async function handleCommand<
   const { maxRetries, baseDelayMs, maxDelayMs, onRetry } = resolveRetryPolicy(options.retry)
 
   for (let attempt = 1; ; attempt++) {
-    try {
-      return await runCommandOnce(options)
+    const outcome = await attemptCommand(options)
+    if (!('conflict' in outcome)) {
+      return outcome.result
     }
-    catch (error) {
-      if (!(error instanceof ConcurrencyError) || attempt > maxRetries) {
-        throw error
-      }
-      // Full jitter: a random delay up to an exponentially growing bound, so
-      // two colliding commands do not collide again in lockstep.
-      const delayMs = Math.floor(Math.random() * Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1)))
-      onRetry?.({ error, attempt, delayMs })
-      await new Promise(resolve => setTimeout(resolve, delayMs))
+    if (attempt > maxRetries) {
+      throw outcome.conflict
     }
+    // Full jitter: a random delay up to an exponentially growing bound, so
+    // two colliding commands do not collide again in lockstep.
+    const delayMs = Math.floor(Math.random() * Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1)))
+    onRetry?.({ error: outcome.conflict, attempt, delayMs })
+    await new Promise(resolve => setTimeout(resolve, delayMs))
   }
 }
 
-async function runCommandOnce<
+/**
+ * A conflict on append is reported as an outcome rather than thrown, so
+ * that only the append's own ConcurrencyError is retried: one thrown by the
+ * handler is a handler error like any other and rejects immediately.
+ */
+type AttemptOutcome<TDomainEvent extends AnyDomainEvent>
+  = | { result: MultiStreamAppendResult<TDomainEvent, any> }
+    | { conflict: ConcurrencyError }
+
+async function attemptCommand<
   Streams extends ReadonlyArray<StreamConfig<any, any>>,
   CommandType extends string,
   CommandData extends DefaultRecord | undefined,
@@ -100,7 +123,7 @@ async function runCommandOnce<
   TDomainEvent extends AnyDomainEvent,
 >(
   options: CommandHandlerOptions<Streams, CommandType, CommandData, CommandMetadata, TDomainEvent>,
-): Promise<MultiStreamAppendResult<TDomainEvent, any>> {
+): Promise<AttemptOutcome<TDomainEvent>> {
   const {
     eventStore,
     streams,
@@ -141,7 +164,7 @@ async function runCommandOnce<
    * appended and no version is checked, since no stream is touched.
    */
   if (eventsToAppend.length === 0) {
-    return { streams: [], totalEventsAppended: 0, streamSubjects: [] }
+    return { result: { streams: [], totalEventsAppended: 0, streamSubjects: [] } }
   }
 
   /**
@@ -156,10 +179,13 @@ async function runCommandOnce<
     }
   }
 
-  const newState = await eventStore.appendOrCreateStream<TDomainEvent>(
-    eventsToAppend,
-    { expectedVersions },
-  )
-
-  return newState
+  try {
+    return { result: await eventStore.appendOrCreateStream<TDomainEvent>(eventsToAppend, { expectedVersions }) }
+  }
+  catch (error) {
+    if (error instanceof ConcurrencyError) {
+      return { conflict: error }
+    }
+    throw error
+  }
 }
