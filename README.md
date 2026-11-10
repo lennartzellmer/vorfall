@@ -148,7 +148,7 @@ catch (error) {
 
 Expected versions per stream subject can be a number (exact event count, `0` means the stream must not exist yet), `'no-stream'` (append must create the stream) or `'any'` (no check). On a mismatch the whole append is rolled back, including all other streams in the same call.
 
-Checking is the default: `expectedVersions` is required, and when it is a map, every stream in the append must be listed — a missing entry throws `MissingExpectedVersionError` before anything is written. Opting out is always explicit: list a stream with `'any'`, or pass `expectedVersions: 'any'` to skip the check for the whole append (e.g. order-insensitive logs or imports where no decision depends on prior state).
+Checking is the default: `expectedVersions` is required, and when it is a map, every stream the caller writes to must be listed — a missing entry throws `MissingExpectedVersionError` before anything is written. A stream that only [derived events](#derived-events) write to needs no entry. For the caller's streams, opting out is always explicit: list a stream with `'any'`, or pass `expectedVersions: 'any'` to skip the check for the whole append (e.g. order-insensitive logs or imports where no decision depends on prior state).
 
 `handleCommand` wires this automatically: the versions observed while aggregating the configured streams are enforced on append, so a concurrent command on the same stream cannot silently interleave.
 
@@ -180,6 +180,43 @@ await handleCommand({ eventStore, streams, command, commandHandlerFunction, retr
 This is separate from the MongoDB driver's own retry: `session.withTransaction` re-runs the append transaction on transient errors (`TransientTransactionError`, `UnknownTransactionCommitResult`) with the *same* expected versions. If a competing write committed in the meantime, that ends in a `ConcurrencyError`, which `handleCommand` then retries with a fresh read.
 
 The `states` map handed to the command handler contains one entry per listed stream, with the initial state for streams that do not exist yet. Reading a subject that was not listed throws a `StreamNotLoadedError`, so a wiring mistake in the caller is not mistaken for a missing stream.
+
+## Derived Events
+
+`deriveEvents` is a `createEventStore` option for events that must exist whenever another event exists. It receives the events of an append and returns further events, which are written in the same transaction: either everything is stored or nothing is. A typical use is recording a task next to the domain event that requires it, so a crash cannot lose the task.
+
+```typescript
+const eventStore = createEventStore({
+  connectionString,
+  deriveEvents: events => events.flatMap((event) => {
+    if (event.type !== 'order.placed') {
+      return []
+    }
+    return [createDomainEvent({
+      type: 'task.created',
+      subject: createStreamSubject(`task/${event.id}`),
+      data: { order: event.subject },
+    })]
+  }),
+})
+
+const result = await eventStore.appendOrCreateStream([orderPlaced], {
+  expectedVersions: new Map([[orderStream, 'no-stream']]),
+})
+
+result.streamSubjects // ['order/1']
+result.eventsWritten // { total: 2, direct: 1, derived: 1 }
+```
+
+- **Once per append.** The function runs once per `appendOrCreateStream` call, before the transaction starts, and not again when the MongoDB driver retries the transaction. A `handleCommand` retry is a new append, so it runs again with the new events.
+- **Only the caller's events.** Derived events are not passed through the function again.
+- **Synchronous and pure.** It has no access to the database or the session and must have no side effects. If it throws, nothing is written and the error reaches the caller unchanged. Returning `[]` behaves as if the option were not set.
+- **Order.** Within a stream, the caller's events come before the derived events.
+- **Expected versions.** A stream listed in `expectedVersions` is checked as usual, even if only derived events write to it. A stream that only derived events write to needs no entry and is then written without a check. A conflict in any stream rolls back the whole append.
+- **Projections.** Derived events update projections like any other event.
+- **Result.** `streamSubjects` and `streams` only name streams the caller writes to, so technical streams stay out of responses built from them. If a derived event lands in a caller's stream, that stream's document contains it. `eventsWritten` reports every event of the call: `total` counts all of them, `direct` the events passed to `appendOrCreateStream` and `derived` the events returned by `deriveEvents`.
+
+Derived events are stored facts. Unlike projections they are never recomputed, so a later change to `deriveEvents` does not affect events already written.
 
 ## Installation
 
@@ -269,7 +306,7 @@ await handleCommand({
 })
 ```
 
-A handler that finds the command already satisfied by the current state returns an empty array. `handleCommand` then appends nothing and resolves with `totalEventsAppended: 0`, so an idempotent command needs no sentinel error:
+A handler that finds the command already satisfied by the current state returns an empty array. `handleCommand` then appends nothing and resolves with `eventsWritten.total` at `0`, so an idempotent command needs no sentinel error:
 
 ```typescript
 function changeEmail({ command, states }) {

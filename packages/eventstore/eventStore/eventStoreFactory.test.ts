@@ -1,8 +1,9 @@
 import type { DomainEvent, Subject } from '../types/index'
 import type { EventStoreInstance } from './eventStoreFactory'
+import type { EventStoreOptions } from './eventStoreFactory.types'
 import { CloudEvent } from 'cloudevents'
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createDomainEvent, createEventStream } from '../utils/utilsEventStore'
 import { createProjectionDefinition, UnhandledProjectionEventError } from '../utils/utilsProjections'
 import { createStreamSubject, createSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject'
@@ -79,7 +80,7 @@ describe('mongoClientWrapper Integration Tests', () => {
       const result = await eventStore.appendOrCreateStream([testEvent], { expectedVersions: 'any' })
 
       expect(result).toBeDefined()
-      expect(result.totalEventsAppended).toBe(1)
+      expect(result.eventsWritten.total).toBe(1)
       expect(result.streamSubjects).toEqual([streamSubject])
       expect(result.streams.length).toBe(1)
 
@@ -105,7 +106,7 @@ describe('mongoClientWrapper Integration Tests', () => {
       const result = await eventStore.appendOrCreateStream([newEvent], { expectedVersions: 'any' })
 
       expect(result).toBeDefined()
-      expect(result.totalEventsAppended).toBe(1)
+      expect(result.eventsWritten.total).toBe(1)
       expect(result.streamSubjects).toEqual([streamSubject])
       expect(result.streams.length).toBe(1)
 
@@ -378,7 +379,7 @@ describe('mongoClientWrapper Integration Tests', () => {
       const result = await eventStore.appendOrCreateStream([event1, event2, event3], { expectedVersions: 'any' })
 
       expect(result).toBeDefined()
-      expect(result.totalEventsAppended).toBe(3)
+      expect(result.eventsWritten.total).toBe(3)
       expect(result.streamSubjects.length).toBe(2)
       expect(result.streams.length).toBe(2)
 
@@ -685,6 +686,167 @@ describe('mongoClientWrapper Integration Tests', () => {
 
       const existing = await eventStore.getEventStreamBySubject(streamSubject)
       expect(existing.streamExists).toBe(false)
+    })
+  })
+
+  describe('deriveEvents', () => {
+    const orderStream = createStreamSubject('order/1')
+    const taskStream = createStreamSubject('task/1')
+    const orderPlaced = createDomainEvent({ type: 'order.placed', subject: orderStream, data: { amount: 10 } })
+    const taskCreated = createDomainEvent({ type: 'task.created', subject: taskStream, data: { order: orderStream } })
+
+    const storesToClose: Array<EventStoreInstance<any>> = []
+
+    function closedAfterTest<TStore extends EventStoreInstance<any>>(store: TStore): TStore {
+      storesToClose.push(store)
+      return store
+    }
+
+    function createDerivingStore(deriveEvents: NonNullable<EventStoreOptions['deriveEvents']>): EventStoreInstance {
+      return closedAfterTest(createEventStore({ connectionString, deriveEvents }))
+    }
+
+    afterEach(async () => {
+      for (const store of storesToClose.splice(0)) {
+        await store.getInstanceMongoClientWrapper().close()
+      }
+    })
+
+    it('should store a derived event in its own stream', async () => {
+      const store = createDerivingStore(() => [taskCreated])
+
+      await store.appendOrCreateStream([orderPlaced], { expectedVersions: 'any' })
+
+      const task = await eventStore.getEventStreamBySubject(taskStream)
+      expect(task.version).toBe(1)
+      expect(task.events.map(event => event.type)).toEqual(['task.created'])
+    })
+
+    it('should not require an expected version for a stream only derived events write to', async () => {
+      const store = createDerivingStore(() => [taskCreated])
+
+      await store.appendOrCreateStream([orderPlaced], {
+        expectedVersions: new Map([[orderStream, 'no-stream' as const]]),
+      })
+
+      const task = await eventStore.getEventStreamBySubject(taskStream)
+      expect(task.version).toBe(1)
+    })
+
+    it('should report only the caller streams and count every written event', async () => {
+      const store = createDerivingStore(() => [taskCreated])
+
+      const result = await store.appendOrCreateStream([orderPlaced], { expectedVersions: 'any' })
+
+      expect(result.streamSubjects).toEqual([orderStream])
+      expect(result.streams.map(stream => stream.streamSubject)).toEqual([orderStream])
+      expect(result.eventsWritten).toEqual({ total: 2, direct: 1, derived: 1 })
+    })
+
+    it('should put a derived event in a caller stream behind the caller events and count it as derived', async () => {
+      const orderPaid = createDomainEvent({ type: 'order.paid', subject: orderStream, data: { amount: 10 } })
+      const orderConfirmed = createDomainEvent({ type: 'order.confirmed', subject: orderStream, data: { by: 'system' } })
+      const store = createDerivingStore(() => [orderConfirmed])
+
+      const result = await store.appendOrCreateStream([orderPlaced, orderPaid], { expectedVersions: 'any' })
+
+      expect(result.streams).toHaveLength(1)
+      expect(result.streams[0]!.events.map(event => event.type)).toEqual(['order.placed', 'order.paid', 'order.confirmed'])
+      expect(result.eventsWritten).toEqual({ total: 3, direct: 2, derived: 1 })
+    })
+
+    it('should reject a caller stream missing from the map and write nothing, not even a derived event', async () => {
+      const store = createDerivingStore(() => [taskCreated])
+
+      const append = store.appendOrCreateStream([orderPlaced], { expectedVersions: new Map() })
+
+      await expect(append).rejects.toBeInstanceOf(MissingExpectedVersionError)
+      expect((await eventStore.getEventStreamBySubject(orderStream)).streamExists).toBe(false)
+      expect((await eventStore.getEventStreamBySubject(taskStream)).streamExists).toBe(false)
+    })
+
+    it('should not write the derived stream on a conflict in the caller stream', async () => {
+      await eventStore.appendOrCreateStream([orderPlaced], { expectedVersions: 'any' })
+      const store = createDerivingStore(() => [taskCreated])
+
+      const append = store.appendOrCreateStream([orderPlaced], {
+        expectedVersions: new Map([[orderStream, 5]]),
+      })
+
+      await expect(append).rejects.toBeInstanceOf(ConcurrencyError)
+      expect((await eventStore.getEventStreamBySubject(taskStream)).streamExists).toBe(false)
+    })
+
+    it('should roll back the caller stream when a listed derived stream has a stale version', async () => {
+      const earlierTask = createDomainEvent({ type: 'task.created', subject: taskStream, data: { order: 'order/0' } })
+      await eventStore.appendOrCreateStream([earlierTask], { expectedVersions: 'any' })
+      const store = createDerivingStore(() => [taskCreated])
+
+      const append = store.appendOrCreateStream([orderPlaced], {
+        expectedVersions: new Map<Subject, number>([[orderStream, 0], [taskStream, 5]]),
+      })
+
+      await expect(append).rejects.toBeInstanceOf(ConcurrencyError)
+      expect((await eventStore.getEventStreamBySubject(orderStream)).streamExists).toBe(false)
+      expect((await eventStore.getEventStreamBySubject(taskStream)).version).toBe(1)
+    })
+
+    it('should hand an error thrown by deriveEvents to the caller unchanged and write nothing', async () => {
+      const failure = new Error('cannot derive')
+      const store = createDerivingStore(() => {
+        throw failure
+      })
+
+      const append = store.appendOrCreateStream([orderPlaced], { expectedVersions: 'any' })
+
+      await expect(append).rejects.toBe(failure)
+      expect((await eventStore.getEventStreamBySubject(orderStream)).streamExists).toBe(false)
+    })
+
+    it('should behave as without the option when deriveEvents returns nothing', async () => {
+      const collection = eventStore.getCollectionBySubject(orderStream)
+      const plainResult = await eventStore.appendOrCreateStream([orderPlaced], { expectedVersions: 'any' })
+      const plainDocument = await collection.findOne({ _id: orderStream })
+      await collection.deleteOne({ _id: orderStream })
+      const store = createDerivingStore(() => [])
+
+      const result = await store.appendOrCreateStream([orderPlaced], { expectedVersions: 'any' })
+
+      expect(result.eventsWritten).toEqual({ total: 1, direct: 1, derived: 0 })
+      expect(result).toEqual({
+        ...plainResult,
+        streams: [{ ...plainResult.streams[0], metadata: expect.any(Object) }],
+      })
+      expect(await collection.findOne({ _id: orderStream })).toEqual({ ...plainDocument, metadata: expect.any(Object) })
+    })
+
+    it('should run once per append and see only the caller events', async () => {
+      const deriveEvents = vi.fn(() => [taskCreated])
+      const store = createDerivingStore(deriveEvents)
+
+      await store.appendOrCreateStream([orderPlaced], { expectedVersions: 'any' })
+
+      expect(deriveEvents).toHaveBeenCalledTimes(1)
+      expect(deriveEvents).toHaveBeenCalledWith([orderPlaced])
+    })
+
+    it('should keep the projection of a derived stream current', async () => {
+      const openTasks = createProjectionDefinition({
+        name: 'openTasks',
+        canHandle: ['task.created'],
+        evolve: (state: { count: number } | null) => ({ count: (state?.count ?? 0) + 1 }),
+        initialState: () => ({ count: 0 }),
+      })
+      const store = closedAfterTest(createEventStore({
+        connectionString,
+        projections: [openTasks],
+        deriveEvents: () => [taskCreated],
+      }))
+
+      await store.appendOrCreateStream([orderPlaced], { expectedVersions: 'any' })
+
+      const document = await store.getCollectionBySubject(taskStream).findOne({ _id: taskStream })
+      expect(document?.projections).toEqual({ openTasks: { count: 1 } })
     })
   })
 

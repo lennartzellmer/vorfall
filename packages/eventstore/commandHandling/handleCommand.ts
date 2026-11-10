@@ -164,7 +164,7 @@ async function attemptCommand<
    * appended and no version is checked, since no stream is touched.
    */
   if (eventsToAppend.length === 0) {
-    return { result: { streams: [], totalEventsAppended: 0, streamSubjects: [] } }
+    return { result: { streams: [], eventsWritten: { total: 0, direct: 0, derived: 0 }, streamSubjects: [] } }
   }
 
   /**

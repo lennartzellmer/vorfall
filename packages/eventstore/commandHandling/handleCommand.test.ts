@@ -1,7 +1,9 @@
 import type { MockedObject } from 'vitest'
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
 import type { Command, DomainEvent, Subject } from '../types/index'
-import { describe, expect, it, vi } from 'vitest'
+import { MongoMemoryReplSet } from 'mongodb-memory-server'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { createEventStore } from '../eventStore/eventStoreFactory'
 import { createDomainEvent, createEventStream } from '../utils/utilsEventStore'
 import { createStreamSubject } from '../utils/utilsSubject'
 import { handleCommand, StreamNotLoadedError } from './handleCommand'
@@ -41,7 +43,7 @@ describe('handleCommand', () => {
     const mockedAggregatedState: AggregatedState = { counter: 42 }
     const mockedNewState = {
       streams: [createEventStream([counterIncrementedEvent])],
-      totalEventsAppended: 1,
+      eventsWritten: { total: 1, direct: 1, derived: 0 },
       streamSubjects: [streamSubject],
     }
 
@@ -112,7 +114,7 @@ describe('handleCommand', () => {
     const mockedAggregatedState: AggregatedState = { counter: 10 }
     const mockedNewState = {
       streams: [createEventStream([counterIncrementedEvent])],
-      totalEventsAppended: 1,
+      eventsWritten: { total: 1, direct: 1, derived: 0 },
       streamSubjects: [streamSubject],
     }
 
@@ -198,7 +200,7 @@ describe('handleCommand', () => {
     const mockedAggregatedState: AggregatedState = { counter: 5 }
     const mockedNewState = {
       streams: [createEventStream([counterIncrementedEvent1, counterIncrementedEvent2])],
-      totalEventsAppended: 2,
+      eventsWritten: { total: 2, direct: 2, derived: 0 },
       streamSubjects: [streamSubject],
     }
 
@@ -321,7 +323,7 @@ describe('handleCommand', () => {
         createEventStream([userSubscribedEvent]),
         createEventStream([emailListSubscriptionAddedEvent]),
       ],
-      totalEventsAppended: 2,
+      eventsWritten: { total: 2, direct: 2, derived: 0 },
       streamSubjects: [userStreamSubject, emailListStreamSubject],
     }
 
@@ -506,7 +508,7 @@ describe('handleCommand', () => {
 
     expect(commandHandlerFunction).toHaveBeenCalledWith({ command: setCounterCommand, states: expect.any(Map) })
     expect(mockEventStore.appendOrCreateStream).not.toHaveBeenCalled()
-    expect(result).toEqual({ streams: [], totalEventsAppended: 0, streamSubjects: [] })
+    expect(result).toEqual({ streams: [], eventsWritten: { total: 0, direct: 0, derived: 0 }, streamSubjects: [] })
   })
 
   it('should reject with StreamNotLoadedError when the handler reads a stream that is not listed', async () => {
@@ -539,7 +541,7 @@ describe('handleCommand', () => {
   it('should hand the handler the initial state of a listed stream that does not exist yet', async () => {
     const mockEventStore = {
       aggregateStream: vi.fn().mockResolvedValue({ state: null, streamExists: false, version: 0 }),
-      appendOrCreateStream: vi.fn().mockResolvedValue({ streams: [], totalEventsAppended: 1, streamSubjects: [] }),
+      appendOrCreateStream: vi.fn().mockResolvedValue({ streams: [], eventsWritten: { total: 1, direct: 1, derived: 0 }, streamSubjects: [] }),
     } as MockedObject<EventStoreInstance>
 
     const listed = createStreamSubject('test/listed')
@@ -558,5 +560,37 @@ describe('handleCommand', () => {
     })
 
     expect(seenState).toBeNull()
+  })
+})
+
+describe('handleCommand with deriveEvents', () => {
+  let replSet: MongoMemoryReplSet
+
+  beforeAll(async () => {
+    replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } })
+  })
+
+  afterAll(async () => {
+    await replSet.stop()
+  })
+
+  it('should not run deriveEvents and report nothing written when the handler returns an empty array', async () => {
+    const deriveEvents = vi.fn(() => [])
+    const eventStore = createEventStore({ connectionString: replSet.getUri(), deriveEvents })
+
+    try {
+      const result = await handleCommand({
+        streams: [{ evolve: (state: null) => state, initialState: () => null, streamSubject: createStreamSubject('test/noop') }],
+        eventStore,
+        commandHandlerFunction: () => [],
+        command: createCommand({ type: 'Noop' }),
+      })
+
+      expect(deriveEvents).not.toHaveBeenCalled()
+      expect(result.eventsWritten).toEqual({ total: 0, direct: 0, derived: 0 })
+    }
+    finally {
+      await eventStore.getInstanceMongoClientWrapper().close()
+    }
   })
 })
