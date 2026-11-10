@@ -1,4 +1,6 @@
 export * from './utilsAggregate'
+export * from './utilsEventDerivations'
+export * from './utilsEventDerivations.types'
 export * from './utilsEventStore'
 export * from './utilsMongoFilter'
 export * from './utilsProjections'

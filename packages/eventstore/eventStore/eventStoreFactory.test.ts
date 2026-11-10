@@ -4,6 +4,7 @@ import type { EventStoreOptions } from './eventStoreFactory.types'
 import { CloudEvent } from 'cloudevents'
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { combineEventDerivations, createEventDerivation } from '../utils/utilsEventDerivations'
 import { createDomainEvent, createEventStream } from '../utils/utilsEventStore'
 import { createProjectionDefinition, UnhandledProjectionEventError } from '../utils/utilsProjections'
 import { createStreamSubject, createSubject, getStreamSubjectFromSubject } from '../utils/utilsSubject'
@@ -87,7 +88,7 @@ describe('mongoClientWrapper Integration Tests', () => {
       const stream = result.streams[0]!
       expect(stream.streamSubject).toBe(streamSubject)
       expect(stream.events.length).toBe(1)
-      expect(createDomainEvent(stream.events[0]!)).toMatchObject(testEvent)
+      expect(createDomainEvent(stream.events[0] as typeof testEvent)).toMatchObject(testEvent)
     })
 
     it('should append an event to an existing stream', async () => {
@@ -114,7 +115,7 @@ describe('mongoClientWrapper Integration Tests', () => {
       expect(stream.streamSubject).toBe(streamSubject)
       expect(stream.metadata.createdAt.valueOf()).toBeLessThan(stream.metadata.updatedAt.valueOf())
       expect(stream.events.length).toBe(2)
-      expect(createDomainEvent(stream.events[1]!)).toMatchObject(newEvent)
+      expect(createDomainEvent(stream.events[1] as typeof newEvent)).toMatchObject(newEvent)
     })
 
     it('should store the stream keyed by its subject as _id', async () => {
@@ -720,6 +721,24 @@ describe('mongoClientWrapper Integration Tests', () => {
       const task = await eventStore.getEventStreamBySubject(taskStream)
       expect(task.version).toBe(1)
       expect(task.events.map(event => event.type)).toEqual(['task.created'])
+    })
+
+    it('should store the events of typed derivations combined into the option', async () => {
+      const taskForOrder = createEventDerivation({
+        canHandle: ['order.placed'],
+        derive: (event: typeof orderPlaced) => [createDomainEvent({
+          type: 'task.created',
+          subject: taskStream,
+          data: { order: event.subject },
+        })],
+      })
+      const store = createDerivingStore(combineEventDerivations(taskForOrder))
+
+      const result = await store.appendOrCreateStream([orderPlaced], { expectedVersions: 'any' })
+
+      const task = await eventStore.getEventStreamBySubject(taskStream)
+      expect(task.events.map(event => event.data)).toEqual([{ order: orderStream }])
+      expect(result.eventsWritten).toEqual({ total: 2, direct: 1, derived: 1 })
     })
 
     it('should not require an expected version for a stream only derived events write to', async () => {

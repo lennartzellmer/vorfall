@@ -185,19 +185,23 @@ The `states` map handed to the command handler contains one entry per listed str
 
 `deriveEvents` is a `createEventStore` option for events that must exist whenever another event exists. It receives the events of an append and returns further events, which are written in the same transaction: either everything is stored or nothing is. A typical use is recording a task next to the domain event that requires it, so a crash cannot lose the task.
 
+Build the option from typed derivations. `createEventDerivation` reacts to the event types listed in `canHandle`, and `combineEventDerivations` turns one or more derivations into the option:
+
 ```typescript
+type OrderPlaced = DomainEvent<'order.placed', { amount: number }>
+
+const taskForOrder = createEventDerivation({
+  canHandle: ['order.placed'],
+  derive: (event: OrderPlaced) => [createDomainEvent({
+    type: 'task.created',
+    subject: createStreamSubject(`task/${event.id}`),
+    data: { order: event.subject },
+  })],
+})
+
 const eventStore = createEventStore({
   connectionString,
-  deriveEvents: events => events.flatMap((event) => {
-    if (event.type !== 'order.placed') {
-      return []
-    }
-    return [createDomainEvent({
-      type: 'task.created',
-      subject: createStreamSubject(`task/${event.id}`),
-      data: { order: event.subject },
-    })]
-  }),
+  deriveEvents: combineEventDerivations(taskForOrder),
 })
 
 const result = await eventStore.appendOrCreateStream([orderPlaced], {
@@ -208,13 +212,17 @@ result.streamSubjects // ['order/1']
 result.eventsWritten // { total: 2, direct: 1, derived: 1 }
 ```
 
+Annotate the `derive` parameter with the event type. `canHandle` is then checked against it, so a misspelled type does not compile, and only events of a listed type reach `derive` at runtime. Each caller event goes to every derivation that lists its type, in the order the derivations are given.
+
+`deriveEvents` also accepts a plain function that receives all of the caller's events at once, for rules that look at several of them together. Its events are untyped (`AnyDomainEvent`), so prefer derivations when one event is enough.
+
 - **Once per append.** The function runs once per `appendOrCreateStream` call, before the transaction starts, and not again when the MongoDB driver retries the transaction. A `handleCommand` retry is a new append, so it runs again with the new events.
 - **Only the caller's events.** Derived events are not passed through the function again.
 - **Synchronous and pure.** It has no access to the database or the session and must have no side effects. If it throws, nothing is written and the error reaches the caller unchanged. Returning `[]` behaves as if the option were not set.
 - **Order.** Within a stream, the caller's events come before the derived events.
 - **Expected versions.** A stream listed in `expectedVersions` is checked as usual, even if only derived events write to it. A stream that only derived events write to needs no entry and is then written without a check. A conflict in any stream rolls back the whole append.
 - **Projections.** Derived events update projections like any other event.
-- **Result.** `streamSubjects` and `streams` only name streams the caller writes to, so technical streams stay out of responses built from them. If a derived event lands in a caller's stream, that stream's document contains it. `eventsWritten` reports every event of the call: `total` counts all of them, `direct` the events passed to `appendOrCreateStream` and `derived` the events returned by `deriveEvents`.
+- **Result.** `streamSubjects` and `streams` only name streams the caller writes to, so technical streams stay out of responses built from them. If a derived event lands in a caller's stream, that stream's document contains it. The events in `streams` are typed as `UnknownDomainEvent`, because a stream holds its earlier events and any derived events, not only the appended ones: their `data` has to be checked before it is used. To read an event you appended, use the one you passed in. `eventsWritten` reports every event of the call: `total` counts all of them, `direct` the events passed to `appendOrCreateStream` and `derived` the events returned by `deriveEvents`.
 
 Derived events are stored facts. Unlike projections they are never recomputed, so a later change to `deriveEvents` does not affect events already written.
 

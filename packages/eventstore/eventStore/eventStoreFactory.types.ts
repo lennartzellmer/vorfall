@@ -1,8 +1,15 @@
 import type { Document, Filter } from 'mongodb'
 import type { MongoClientWrapperOptions } from '../mongoClient/mongoClientWrapper.types'
-import type { AnyDomainEvent, Subject } from '../types/index'
+import type { AnyDomainEvent, Subject, UnknownDomainEvent } from '../types/index'
 import type { ProjectionDefinition, ProjectionNames, ProjectionStates, ProjectionStatesWith } from '../utils/utilsProjections.types'
 import type { ExpectedStreamVersion } from './concurrencyError'
+
+/**
+ * Derives further events from the caller's events of one append. It sees
+ * every event type, so its events are untyped; `combineEventDerivations`
+ * builds one from typed derivations.
+ */
+export type DeriveEvents = (events: ReadonlyArray<AnyDomainEvent>) => ReadonlyArray<AnyDomainEvent>
 
 export interface EventStoreOptions<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined> extends MongoClientWrapperOptions {
   projections?: TProjections
@@ -15,7 +22,7 @@ export interface EventStoreOptions<TProjections extends readonly ProjectionDefin
    * it again. It must be synchronous and free of side effects. If it throws,
    * nothing is written and the error reaches the caller unchanged.
    */
-  deriveEvents?: (events: ReadonlyArray<AnyDomainEvent>) => ReadonlyArray<AnyDomainEvent>
+  deriveEvents?: DeriveEvents
 }
 
 export interface EventStream<
@@ -108,10 +115,14 @@ export interface EventsWritten {
 }
 
 export interface MultiStreamAppendResult<
-  TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
   P extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
 > {
-  streams: ReadonlyArray<EventStream<TDomainEvent, P>>
+  /**
+   * The caller's streams as stored after the write. A stream holds every
+   * event stored in it, including earlier events and derived events, so the
+   * type of its events is unknown and their data must be checked before use.
+   */
+  streams: ReadonlyArray<EventStream<UnknownDomainEvent, P>>
   eventsWritten: EventsWritten
   streamSubjects: Array<Subject>
 }
