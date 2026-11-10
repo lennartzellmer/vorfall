@@ -6,6 +6,16 @@ import type { ExpectedStreamVersion } from './concurrencyError'
 
 export interface EventStoreOptions<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined> extends MongoClientWrapperOptions {
   projections?: TProjections
+  /**
+   * Derives further events from the events of an append. They are written in
+   * the same transaction, so either everything is stored or nothing.
+   *
+   * Runs once per `appendOrCreateStream` call, before the transaction starts,
+   * and only sees the caller's events; derived events are not passed through
+   * it again. It must be synchronous and free of side effects. If it throws,
+   * nothing is written and the error reaches the caller unchanged.
+   */
+  deriveEvents?: (events: ReadonlyArray<AnyDomainEvent>) => ReadonlyArray<AnyDomainEvent>
 }
 
 export interface EventStream<
@@ -66,11 +76,12 @@ export interface AggregateStreamResult<State> {
 
 export interface AppendStreamOptions {
   /**
-   * Expected version per stream subject. Every stream in the append must be
-   * listed — a missing entry throws MissingExpectedVersionError. Pass 'any'
-   * (for one stream, or as the whole value to cover all streams) to append
-   * without a concurrency check. On a mismatch the whole append (all streams
-   * in the call) is rolled back with a ConcurrencyError.
+   * Expected version per stream subject. Every stream the caller writes to
+   * must be listed — a missing entry throws MissingExpectedVersionError.
+   * Streams that only derived events write to need no entry. Pass 'any' (for
+   * one stream, or as the whole value to cover all streams) to append without
+   * a concurrency check. On a mismatch the whole append (all streams in the
+   * call) is rolled back with a ConcurrencyError.
    */
   expectedVersions: ReadonlyMap<Subject, ExpectedStreamVersion> | 'any'
 }
@@ -86,11 +97,21 @@ export interface FindMultipleProjectionQuery<T extends Subject = Subject> {
   streamSubject: T
 }
 
+/** What one `appendOrCreateStream` call wrote, for reporting only. */
+export interface EventsWritten {
+  /** Every event the call wrote. */
+  total: number
+  /** The events passed to `appendOrCreateStream`. */
+  direct: number
+  /** The events returned by `deriveEvents`. */
+  derived: number
+}
+
 export interface MultiStreamAppendResult<
   TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
   P extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
 > {
   streams: ReadonlyArray<EventStream<TDomainEvent, P>>
-  totalEventsAppended: number
+  eventsWritten: EventsWritten
   streamSubjects: Array<Subject>
 }

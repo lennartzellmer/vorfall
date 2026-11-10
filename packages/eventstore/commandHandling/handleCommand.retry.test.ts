@@ -121,9 +121,40 @@ describe('handleCommand retry on ConcurrencyError', () => {
     })
 
     expect(commandHandlerFunction).toHaveBeenCalledTimes(2)
-    expect(result.totalEventsAppended).toBe(0)
+    expect(result.eventsWritten.total).toBe(0)
     const { version } = await eventStore.getEventStreamBySubject(streamSubject)
     expect(version).toBe(1)
+  })
+
+  it('should run deriveEvents again on a retry and keep only the derived event of the successful attempt', async () => {
+    const taskStream = createStreamSubject('task/1')
+    const deriveEvents = vi.fn(() => [createDomainEvent({ type: 'task.created', subject: taskStream, data: { for: streamSubject } })])
+    const derivingStore = createEventStore({ connectionString: replSet.getUri(), deriveEvents })
+    const commandHandlerFunction = vi.fn(async () => {
+      if (commandHandlerFunction.mock.calls.length === 1) {
+        await competingAppend(1)
+      }
+      return incremented(1)
+    })
+
+    try {
+      await handleCommand({
+        eventStore: derivingStore,
+        streams: [counterStream],
+        command: incrementCounter(1),
+        commandHandlerFunction,
+        retry: noDelay,
+      })
+    }
+    finally {
+      await derivingStore.getInstanceMongoClientWrapper().close()
+    }
+
+    expect(commandHandlerFunction).toHaveBeenCalledTimes(2)
+    expect(deriveEvents).toHaveBeenCalledTimes(2)
+    const task = await eventStore.getEventStreamBySubject(taskStream)
+    expect(task.version).toBe(1)
+    expect(task.events).toHaveLength(1)
   })
 
   it('should let concurrent commands on the same stream all succeed with the default retry', async () => {

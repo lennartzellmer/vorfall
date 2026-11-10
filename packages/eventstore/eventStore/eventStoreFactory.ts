@@ -186,7 +186,7 @@ async function processStreamInTransaction<
 export function createEventStore<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined>(
   options: EventStoreOptions<TProjections>,
 ): EventStoreInstance<TProjections> {
-  const { projections: configuredProjections, ...mongoClientOptions } = options
+  const { projections: configuredProjections, deriveEvents, ...mongoClientOptions } = options
   const mongoClient = new MongoClientWrapper(mongoClientOptions)
   const projections = configuredProjections || ([] as unknown as TProjections)
 
@@ -259,15 +259,19 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
         throw new Error('Cannot process an empty array of events')
       }
 
-      const eventGroups = groupEventsByStreamSubject(events)
+      const derivedEvents = (deriveEvents?.(events) ?? []) as ReadonlyArray<TDomainEvent>
+      const callerStreamSubjects = new Set(events.map(event => getStreamSubjectFromSubject(event.subject)))
+      const eventGroups = groupEventsByStreamSubject([...events, ...derivedEvents])
 
       // Opting out of the concurrency check is explicit: a map must cover
-      // every stream in the append, so a forgotten stream fails loudly here
-      // instead of silently appending unchecked.
+      // every stream the caller writes to, so a forgotten stream fails loudly
+      // here instead of silently appending unchecked. A stream that only
+      // derived events write to was not part of the caller's decision.
       const { expectedVersions } = options
       const resolvedVersions = new Map<Subject, ExpectedStreamVersion>()
       for (const streamSubject of eventGroups.keys()) {
-        const expected = expectedVersions === 'any' ? 'any' : expectedVersions.get(streamSubject)
+        const listed = expectedVersions === 'any' ? 'any' : expectedVersions.get(streamSubject)
+        const expected = listed ?? (callerStreamSubjects.has(streamSubject) ? undefined : 'any')
         if (expected === undefined) {
           throw new MissingExpectedVersionError(streamSubject)
         }
@@ -291,7 +295,9 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
               resolvedVersions.get(streamSubject)!,
               session,
             )
-            streamResults.push(result)
+            if (callerStreamSubjects.has(streamSubject)) {
+              streamResults.push(result)
+            }
           }
 
           return streamResults
@@ -299,8 +305,12 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
 
         return {
           streams: results,
-          totalEventsAppended: events.length,
-          streamSubjects: Array.from(eventGroups.keys()),
+          eventsWritten: {
+            total: events.length + derivedEvents.length,
+            direct: events.length,
+            derived: derivedEvents.length,
+          },
+          streamSubjects: Array.from(callerStreamSubjects),
         }
       }
       finally {
