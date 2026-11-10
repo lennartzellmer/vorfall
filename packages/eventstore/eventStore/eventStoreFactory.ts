@@ -37,7 +37,7 @@ export interface EventStoreInstance<
   appendOrCreateStream: <TDomainEvent extends AnyDomainEvent>(
     events: Array<TDomainEvent>,
     options: AppendStreamOptions,
-  ) => Promise<MultiStreamAppendResult<TDomainEvent, TProjections>>
+  ) => Promise<MultiStreamAppendResult<TProjections>>
 }
 
 /**
@@ -254,14 +254,14 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
     async appendOrCreateStream<TDomainEvent extends AnyDomainEvent>(
       events: Array<TDomainEvent>,
       options: AppendStreamOptions,
-    ): Promise<MultiStreamAppendResult<TDomainEvent, TProjections>> {
+    ): Promise<MultiStreamAppendResult<TProjections>> {
       if (!events || events.length === 0) {
         throw new Error('Cannot process an empty array of events')
       }
 
-      const derivedEvents = (deriveEvents?.(events) ?? []) as ReadonlyArray<TDomainEvent>
+      const derivedEvents = deriveEvents?.(events) ?? []
       const callerStreamSubjects = new Set(events.map(event => getStreamSubjectFromSubject(event.subject)))
-      const eventGroups = groupEventsByStreamSubject([...events, ...derivedEvents])
+      const eventGroups = groupEventsByStreamSubject<ReadonlyArray<AnyDomainEvent>>([...events, ...derivedEvents])
 
       // Opting out of the concurrency check is explicit: a map must cover
       // every stream the caller writes to, so a forgotten stream fails loudly
@@ -283,10 +283,10 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
 
       try {
         const results = await session.withTransaction(async () => {
-          const streamResults: Array<EventStream<TDomainEvent, TProjections>> = []
+          const streamResults: Array<EventStream<AnyDomainEvent, TProjections>> = []
 
           for (const [streamSubject, streamEvents] of eventGroups) {
-            const collection = this.getCollectionBySubject<TDomainEvent>(streamSubject)
+            const collection = this.getCollectionBySubject(streamSubject)
             const result = await processStreamInTransaction(
               streamSubject,
               streamEvents,

@@ -10,6 +10,13 @@ export default defineConfig({
       'packages/**/__tests__/**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
     ],
 
+    // Type tests (*.test-d.ts) are checked with tsc as part of every test run;
+    // neither the build (tsc -b excludes them) nor a plain run would see them.
+    typecheck: {
+      enabled: true,
+      include: ['packages/**/*.test-d.ts'],
+    },
+
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

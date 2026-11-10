@@ -1,5 +1,5 @@
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
-import type { Command, DomainEvent, Subject } from '../types/index'
+import type { AnyDomainEvent, Command, DomainEvent, Subject } from '../types/index'
 import type { CommandHandlerFunction } from './handleCommand.types'
 import { expectTypeOf, test } from 'vitest'
 import { handleCommand } from './handleCommand'
@@ -22,44 +22,19 @@ const streams = [{
   evolve: (state: CounterState, _event: CounterIncremented): CounterState => state,
 }]
 
-test('infers the event type from a handler returning a single event', async () => {
-  const result = await handleCommand({
-    eventStore,
-    command,
-    streams,
-    commandHandlerFunction: () => counterEvent,
-  })
-  expectTypeOf(result.streams[0]!.events[0]!).toEqualTypeOf<CounterIncremented>()
+test('accepts a handler returning an event, an array of events or a Promise of either', () => {
+  void handleCommand({ eventStore, command, streams, commandHandlerFunction: () => counterEvent })
+  void handleCommand({ eventStore, command, streams, commandHandlerFunction: () => [counterEvent, auditEvent] })
+  void handleCommand({ eventStore, command, streams, commandHandlerFunction: async () => counterEvent })
+  void handleCommand({ eventStore, command, streams, commandHandlerFunction: async () => [counterEvent] })
 })
 
-test('infers the element type from a handler returning an array', async () => {
-  const result = await handleCommand({
-    eventStore,
-    command,
-    streams,
-    commandHandlerFunction: () => [counterEvent],
-  })
-  expectTypeOf(result.streams[0]!.events[0]!).toEqualTypeOf<CounterIncremented>()
-})
+// A returned stream holds every event stored in it: its earlier events and
+// derived events, not only the ones the handler returned.
+test('types the result stream events as any stored event, not as the handler events', async () => {
+  const result = await handleCommand({ eventStore, command, streams, commandHandlerFunction: () => counterEvent })
 
-test('infers through a Promise return', async () => {
-  const result = await handleCommand({
-    eventStore,
-    command,
-    streams,
-    commandHandlerFunction: async () => counterEvent,
-  })
-  expectTypeOf(result.streams[0]!.events[0]!).toEqualTypeOf<CounterIncremented>()
-})
-
-test('infers the union when the handler emits to multiple streams', async () => {
-  const result = await handleCommand({
-    eventStore,
-    command,
-    streams,
-    commandHandlerFunction: () => [counterEvent, auditEvent],
-  })
-  expectTypeOf(result.streams[0]!.events[0]!).toEqualTypeOf<CounterIncremented | AuditLogged>()
+  expectTypeOf(result.streams[0]!.events[0]!).toEqualTypeOf<AnyDomainEvent>()
 })
 
 test('contextually types the command param of an inline handler', async () => {
@@ -74,7 +49,7 @@ test('contextually types the command param of an inline handler', async () => {
   })
 })
 
-test('infers from a handler declared outside the call', async () => {
+test('accepts a handler declared outside the call', () => {
   const externalHandler: CommandHandlerFunction<
     typeof streams,
     'IncrementCounter',
@@ -83,13 +58,7 @@ test('infers from a handler declared outside the call', async () => {
     CounterIncremented
   > = () => counterEvent
 
-  const result = await handleCommand({
-    eventStore,
-    command,
-    streams,
-    commandHandlerFunction: externalHandler,
-  })
-  expectTypeOf(result.streams[0]!.events[0]!).toEqualTypeOf<CounterIncremented>()
+  void handleCommand({ eventStore, command, streams, commandHandlerFunction: externalHandler })
 })
 
 test('rejects a handler that does not return domain events', () => {

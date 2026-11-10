@@ -87,7 +87,7 @@ export async function handleCommand<
   TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
 >(
   options: CommandHandlerOptions<Streams, CommandType, CommandData, CommandMetadata, TDomainEvent>,
-): Promise<MultiStreamAppendResult<TDomainEvent, any>> {
+): Promise<MultiStreamAppendResult<any>> {
   const { maxRetries, baseDelayMs, maxDelayMs, onRetry } = resolveRetryPolicy(options.retry)
 
   for (let attempt = 1; ; attempt++) {
@@ -111,8 +111,8 @@ export async function handleCommand<
  * that only the append's own ConcurrencyError is retried: one thrown by the
  * handler is a handler error like any other and rejects immediately.
  */
-type AttemptOutcome<TDomainEvent extends AnyDomainEvent>
-  = | { result: MultiStreamAppendResult<TDomainEvent, any> }
+type AttemptOutcome
+  = | { result: MultiStreamAppendResult<any> }
     | { conflict: ConcurrencyError }
 
 async function attemptCommand<
@@ -123,7 +123,7 @@ async function attemptCommand<
   TDomainEvent extends AnyDomainEvent,
 >(
   options: CommandHandlerOptions<Streams, CommandType, CommandData, CommandMetadata, TDomainEvent>,
-): Promise<AttemptOutcome<TDomainEvent>> {
+): Promise<AttemptOutcome> {
   const {
     eventStore,
     streams,

@@ -4,6 +4,13 @@ import type { AnyDomainEvent, Subject } from '../types/index'
 import type { ProjectionDefinition, ProjectionNames, ProjectionStates, ProjectionStatesWith } from '../utils/utilsProjections.types'
 import type { ExpectedStreamVersion } from './concurrencyError'
 
+/**
+ * Derives further events from the caller's events of one append. It sees
+ * every event type, so its events are untyped; `combineEventDerivations`
+ * builds one from typed derivations.
+ */
+export type DeriveEvents = (events: ReadonlyArray<AnyDomainEvent>) => ReadonlyArray<AnyDomainEvent>
+
 export interface EventStoreOptions<TProjections extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined> extends MongoClientWrapperOptions {
   projections?: TProjections
   /**
@@ -15,7 +22,7 @@ export interface EventStoreOptions<TProjections extends readonly ProjectionDefin
    * it again. It must be synchronous and free of side effects. If it throws,
    * nothing is written and the error reaches the caller unchanged.
    */
-  deriveEvents?: (events: ReadonlyArray<AnyDomainEvent>) => ReadonlyArray<AnyDomainEvent>
+  deriveEvents?: DeriveEvents
 }
 
 export interface EventStream<
@@ -108,10 +115,14 @@ export interface EventsWritten {
 }
 
 export interface MultiStreamAppendResult<
-  TDomainEvent extends AnyDomainEvent = AnyDomainEvent,
   P extends readonly ProjectionDefinition<any, any, any>[] | undefined = undefined,
 > {
-  streams: ReadonlyArray<EventStream<TDomainEvent, P>>
+  /**
+   * The caller's streams as stored after the write. A stream holds every
+   * event stored in it, including earlier events and derived events, so its
+   * events are not narrowed to the type of the appended ones.
+   */
+  streams: ReadonlyArray<EventStream<AnyDomainEvent, P>>
   eventsWritten: EventsWritten
   streamSubjects: Array<Subject>
 }
