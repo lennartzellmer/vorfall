@@ -1,5 +1,5 @@
 import type { EventStoreInstance } from '../eventStore/eventStoreFactory'
-import type { AnyDomainEvent, Command, DomainEvent, Subject } from '../types/index'
+import type { Command, DomainEvent, Subject, UnknownDomainEvent } from '../types/index'
 import type { CommandHandlerFunction } from './handleCommand.types'
 import { expectTypeOf, test } from 'vitest'
 import { handleCommand } from './handleCommand'
@@ -31,10 +31,10 @@ test('accepts a handler returning an event, an array of events or a Promise of e
 
 // A returned stream holds every event stored in it: its earlier events and
 // derived events, not only the ones the handler returned.
-test('types the result stream events as any stored event, not as the handler events', async () => {
+test('types the result stream events as unknown stored events, not as the handler events', async () => {
   const result = await handleCommand({ eventStore, command, streams, commandHandlerFunction: () => counterEvent })
 
-  expectTypeOf(result.streams[0]!.events[0]!).toEqualTypeOf<AnyDomainEvent>()
+  expectTypeOf(result.streams[0]!.events[0]!).toEqualTypeOf<UnknownDomainEvent>()
 })
 
 test('contextually types the command param of an inline handler', async () => {

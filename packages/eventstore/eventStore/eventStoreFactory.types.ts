@@ -1,6 +1,6 @@
 import type { Document, Filter } from 'mongodb'
 import type { MongoClientWrapperOptions } from '../mongoClient/mongoClientWrapper.types'
-import type { AnyDomainEvent, Subject } from '../types/index'
+import type { AnyDomainEvent, Subject, UnknownDomainEvent } from '../types/index'
 import type { ProjectionDefinition, ProjectionNames, ProjectionStates, ProjectionStatesWith } from '../utils/utilsProjections.types'
 import type { ExpectedStreamVersion } from './concurrencyError'
 
@@ -119,10 +119,10 @@ export interface MultiStreamAppendResult<
 > {
   /**
    * The caller's streams as stored after the write. A stream holds every
-   * event stored in it, including earlier events and derived events, so its
-   * events are not narrowed to the type of the appended ones.
+   * event stored in it, including earlier events and derived events, so the
+   * type of its events is unknown and their data must be checked before use.
    */
-  streams: ReadonlyArray<EventStream<AnyDomainEvent, P>>
+  streams: ReadonlyArray<EventStream<UnknownDomainEvent, P>>
   eventsWritten: EventsWritten
   streamSubjects: Array<Subject>
 }

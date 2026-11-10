@@ -88,7 +88,7 @@ describe('mongoClientWrapper Integration Tests', () => {
       const stream = result.streams[0]!
       expect(stream.streamSubject).toBe(streamSubject)
       expect(stream.events.length).toBe(1)
-      expect(createDomainEvent(stream.events[0]!)).toMatchObject(testEvent)
+      expect(createDomainEvent(stream.events[0] as typeof testEvent)).toMatchObject(testEvent)
     })
 
     it('should append an event to an existing stream', async () => {
@@ -115,7 +115,7 @@ describe('mongoClientWrapper Integration Tests', () => {
       expect(stream.streamSubject).toBe(streamSubject)
       expect(stream.metadata.createdAt.valueOf()).toBeLessThan(stream.metadata.updatedAt.valueOf())
       expect(stream.events.length).toBe(2)
-      expect(createDomainEvent(stream.events[1]!)).toMatchObject(newEvent)
+      expect(createDomainEvent(stream.events[1] as typeof newEvent)).toMatchObject(newEvent)
     })
 
     it('should store the stream keyed by its subject as _id', async () => {

@@ -1,5 +1,5 @@
 import type { ClientSession, Collection, Filter, PushOperator, UpdateFilter } from 'mongodb'
-import type { AnyDomainEvent, Subject } from '../types/index'
+import type { AnyDomainEvent, Subject, UnknownDomainEvent } from '../types/index'
 import type { ProjectionDefinition } from '../utils/utilsProjections.types'
 import type { ExpectedStreamVersion } from './concurrencyError'
 import type { AggregateStreamResult, AppendStreamOptions, EventStoreOptions, EventStream, MultiStreamAppendResult, ReadStreamResult, StoredEventStream } from './eventStoreFactory.types'
@@ -283,7 +283,7 @@ export function createEventStore<TProjections extends readonly ProjectionDefinit
 
       try {
         const results = await session.withTransaction(async () => {
-          const streamResults: Array<EventStream<AnyDomainEvent, TProjections>> = []
+          const streamResults: Array<EventStream<UnknownDomainEvent, TProjections>> = []
 
           for (const [streamSubject, streamEvents] of eventGroups) {
             const collection = this.getCollectionBySubject(streamSubject)

@@ -95,7 +95,7 @@ describe('handleCommand retry on ConcurrencyError', () => {
     expect(commandHandlerFunction).toHaveBeenCalledTimes(2)
     expect(seenCounters).toEqual([1, 11])
     // The decision of the stale first attempt (+99) was discarded, not re-appended.
-    expect(result.streams[0]!.events.map(event => event.data.by)).toEqual([1, 10, 89])
+    expect(result.streams[0]!.events.map(event => event.data?.by)).toEqual([1, 10, 89])
     expect(result.streams[0]!.version).toBe(3)
   })
 
