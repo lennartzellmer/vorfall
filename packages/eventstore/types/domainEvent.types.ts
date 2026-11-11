@@ -23,4 +23,4 @@ export type DomainEvent<
     type: EventType
     subject: EventSubject
     data: EventData extends undefined ? undefined : EventData
-  } & (EventMetaData extends undefined ? Record<string, never> : { metadata: EventMetaData })
+  } & (EventMetaData extends undefined ? { metadata?: undefined } : { metadata: EventMetaData })
